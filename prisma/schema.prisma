@@ -1,0 +1,711 @@
+// Proof2Pay data model. See PROOF2PAY_BUILD_PLAN.md Section 9.
+// Money is Decimal(14,2); PayPal status fields keep PayPal's own strings verbatim.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  EXPORTER
+  CARRIER
+  BUYER
+  MANAGER
+}
+
+enum PartyRole {
+  EXPORTER
+  CARRIER
+  BUYER
+}
+
+enum ShipmentStatus {
+  DRAFT
+  CONTRACT_PENDING
+  CONTRACTED
+  IN_TRANSIT
+  DELIVERED
+  VERIFIED
+  VERIFICATION_FAILED
+  INVOICED
+  PAID
+  DISPUTED
+  CLOSED
+  CANCELLED
+}
+
+enum JurisdictionPreset {
+  IN_MSMED
+  GENERIC
+}
+
+enum ContractStatus {
+  DRAFT
+  PENDING_ACCEPTANCE
+  ACCEPTED
+  SUPERSEDED
+}
+
+/// How the goods value settles once delivery is verified. Freight always settles by order capture.
+enum GoodsSettlement {
+  INVOICE
+  ORDER_CAPTURE
+}
+
+enum ChargePurpose {
+  GOODS
+  FREIGHT
+}
+
+enum EvidenceType {
+  POD
+  PHOTO
+}
+
+enum VerificationStatus {
+  VERIFIED
+  VERIFIED_WITH_DISCREPANCY
+  FAILED
+}
+
+enum PayPalOrderIntent {
+  AUTHORIZE
+  CAPTURE
+}
+
+enum CreditClockStatus {
+  RUNNING
+  OVERDUE
+  PAID
+  CANCELLED
+}
+
+enum ReminderStage {
+  T_MINUS_7
+  T_MINUS_1
+  T_PLUS_1
+  T_PLUS_15
+}
+
+enum InsurancePolicyStatus {
+  QUOTED
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum InsuranceClaimStatus {
+  SUBMITTED
+  APPROVED
+  PARTIALLY_APPROVED
+  REJECTED
+}
+
+enum RefundRequestStatus {
+  OPEN
+  RECOMMENDED
+  APPROVED
+  REJECTED
+  EXECUTED
+}
+
+enum RecommendationDecision {
+  FULL
+  PARTIAL
+  NONE
+}
+
+enum EvidencePackKind {
+  DISPUTE_RESPONSE
+  MSME_SAMADHAAN
+  INSURANCE_CLAIM
+}
+
+enum EvidencePackStatus {
+  DRAFT
+  READY
+  SUBMITTED
+}
+
+enum ApprovalActionType {
+  REFUND
+  PAYOUT
+  DISPUTE_EVIDENCE
+  DISPUTE_ACCEPT_CLAIM
+  CONTRACT_FINALISE
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXECUTED
+  FAILED
+}
+
+enum AuditAgent {
+  CONTRACT_AI
+  DELIVERY_AI
+  PAYMENT_AI
+  RESOLUTION_AI
+  TRUST_AI
+  WEBHOOK
+  OPERATOR
+  SYSTEM
+}
+
+enum TrustSubjectRole {
+  PAYER
+  CARRIER
+}
+
+enum TrustConfidence {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+// ---------------------------------------------------------------------------
+// Parties
+// ---------------------------------------------------------------------------
+
+model Business {
+  id               String   @id @default(cuid())
+  name             String
+  isExporter       Boolean  @default(false)
+  isCarrier        Boolean  @default(false)
+  isBuyer          Boolean  @default(false)
+  /// ISO 3166-1 alpha-2
+  country          String
+  city             String?
+  paypalEmail      String?
+  paypalMerchantId String?
+  gstin            String?
+  /// Registered micro or small enterprise: the IN_MSMED preset protects this business as a supplier.
+  msmeRegistered   Boolean  @default(false)
+  udyamNumber      String?
+  verified         Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  users             User[]
+  exporterShipments Shipment[]   @relation("ShipmentExporter")
+  carrierShipments  Shipment[]   @relation("ShipmentCarrier")
+  buyerShipments    Shipment[]   @relation("ShipmentBuyer")
+  trustScores       TrustScore[]
+}
+
+model User {
+  id         String   @id @default(cuid())
+  name       String
+  email      String   @unique
+  role       UserRole
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+  createdAt  DateTime @default(now())
+
+  acceptances      ContractAcceptance[]
+  evidenceUploads  DeliveryEvidence[]
+  refundRequests   RefundRequest[]
+  approvalsDecided ApprovalRequest[]
+  auditEvents      AuditEvent[]
+}
+
+// ---------------------------------------------------------------------------
+// Shipment and contract
+// ---------------------------------------------------------------------------
+
+model Shipment {
+  id                    String             @id @default(cuid())
+  /// Human reference shown in the UI, e.g. SH-1042
+  reference             String             @unique
+  exporterId            String
+  exporter              Business           @relation("ShipmentExporter", fields: [exporterId], references: [id])
+  carrierId             String
+  carrier               Business           @relation("ShipmentCarrier", fields: [carrierId], references: [id])
+  buyerId               String
+  buyer                 Business           @relation("ShipmentBuyer", fields: [buyerId], references: [id])
+  cargoDescription      String
+  quantity              Int
+  unit                  String
+  declaredValue         Decimal            @db.Decimal(14, 2)
+  freightAmount         Decimal            @db.Decimal(14, 2)
+  currency              String             @default("USD")
+  originCity            String
+  originCountry         String
+  destinationCity       String
+  destinationCountry    String
+  pickupWindowStart     DateTime?
+  pickupWindowEnd       DateTime?
+  deliveryWindowStart   DateTime?
+  deliveryWindowEnd     DateTime?
+  /// Net-X terms requested on the shipment draft; the accepted contract holds the binding value.
+  creditTermsDays       Int
+  jurisdictionPreset    JurisdictionPreset @default(GENERIC)
+  insuranceRequested    Boolean            @default(false)
+  carrierTrackingNumber String?
+  pickedUpAt            DateTime?
+  deliveredAt           DateTime?
+  status                ShipmentStatus     @default(DRAFT)
+  /// Historical demo data from prisma/seed.ts, labelled as such in the UI.
+  seeded                Boolean            @default(false)
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  contracts           Contract[]
+  insurancePolicies   InsurancePolicy[]
+  deliveryEvidence    DeliveryEvidence[]
+  verificationReports VerificationReport[]
+  paypalOrders        PayPalOrder[]
+  paypalInvoices      PayPalInvoice[]
+  paypalPayouts       PayPalPayout[]
+  paypalDisputes      PayPalDispute[]
+  paypalTrackings     PayPalTracking[]
+  refundRequests      RefundRequest[]
+  recommendations     Recommendation[]
+  evidencePacks       EvidencePack[]
+  approvalRequests    ApprovalRequest[]
+  auditEvents         AuditEvent[]
+
+  @@index([status])
+  @@index([buyerId])
+  @@index([carrierId])
+}
+
+/// Immutable once created: a change produces a new version and supersedes the old one.
+model Contract {
+  id                 String             @id @default(cuid())
+  shipmentId         String
+  shipment           Shipment           @relation(fields: [shipmentId], references: [id])
+  version            Int
+  clausesJson        Json
+  markdown           String
+  /// sha256 of the canonical clausesJson; each acceptance records the hash it accepted.
+  hash               String
+  jurisdictionPreset JurisdictionPreset
+  creditDays         Int
+  goodsSettlement    GoodsSettlement    @default(INVOICE)
+  /// Contract AI flags: missing clauses, preset violations, inconsistent values.
+  flagsJson          Json?
+  status             ContractStatus     @default(DRAFT)
+  finalisedAt        DateTime?
+  createdAt          DateTime           @default(now())
+
+  acceptances       ContractAcceptance[]
+  insurancePolicies InsurancePolicy[]
+
+  @@unique([shipmentId, version])
+}
+
+model ContractAcceptance {
+  id         String    @id @default(cuid())
+  contractId String
+  contract   Contract  @relation(fields: [contractId], references: [id])
+  party      PartyRole
+  userId     String
+  user       User      @relation(fields: [userId], references: [id])
+  hash       String
+  acceptedAt DateTime  @default(now())
+
+  @@unique([contractId, party])
+}
+
+// ---------------------------------------------------------------------------
+// Simulated insurer
+// ---------------------------------------------------------------------------
+
+model InsurancePolicy {
+  id             String                @id @default(cuid())
+  shipmentId     String
+  shipment       Shipment              @relation(fields: [shipmentId], references: [id])
+  contractId     String?
+  contract       Contract?             @relation(fields: [contractId], references: [id])
+  insurerName    String                @default("Simulated Insurer")
+  quoteReference String                @unique
+  coverageAmount Decimal               @db.Decimal(14, 2)
+  premium        Decimal               @db.Decimal(14, 2)
+  currency       String                @default("USD")
+  termsJson      Json?
+  status         InsurancePolicyStatus @default(QUOTED)
+  simulated      Boolean               @default(true)
+  createdAt      DateTime              @default(now())
+
+  claims InsuranceClaim[]
+}
+
+model InsuranceClaim {
+  id             String               @id @default(cuid())
+  policyId       String
+  policy         InsurancePolicy      @relation(fields: [policyId], references: [id])
+  claimReference String               @unique
+  amountClaimed  Decimal              @db.Decimal(14, 2)
+  amountApproved Decimal?             @db.Decimal(14, 2)
+  reason         String
+  status         InsuranceClaimStatus @default(SUBMITTED)
+  decisionNote   String?
+  decidedAt      DateTime?
+  simulated      Boolean              @default(true)
+  createdAt      DateTime             @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Delivery
+// ---------------------------------------------------------------------------
+
+model DeliveryEvidence {
+  id            String       @id @default(cuid())
+  shipmentId    String
+  shipment      Shipment     @relation(fields: [shipmentId], references: [id])
+  type          EvidenceType
+  url           String
+  fileName      String
+  mimeType      String
+  uploadedById  String?
+  uploadedBy    User?        @relation(fields: [uploadedById], references: [id])
+  extractedJson Json?
+  createdAt     DateTime     @default(now())
+}
+
+model VerificationReport {
+  id            String             @id @default(cuid())
+  shipmentId    String
+  shipment      Shipment           @relation(fields: [shipmentId], references: [id])
+  status        VerificationStatus
+  confidence    Float
+  extractedJson Json
+  /// [{ field, expected, observed, severity, note }]
+  discrepancies Json
+  summary       String
+  createdAt     DateTime           @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// PayPal mirror tables
+// ---------------------------------------------------------------------------
+
+model PayPalOrder {
+  id                  String            @id @default(cuid())
+  shipmentId          String
+  shipment            Shipment          @relation(fields: [shipmentId], references: [id])
+  paypalOrderId       String            @unique
+  intent              PayPalOrderIntent
+  purpose             ChargePurpose
+  status              String
+  amount              Decimal           @db.Decimal(14, 2)
+  currency            String            @default("USD")
+  approveUrl          String?
+  authorizationId     String?
+  authorizationStatus String?
+  authorizedAt        DateTime?
+  raw                 Json?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  captures PayPalCapture[]
+}
+
+model PayPalCapture {
+  id              String      @id @default(cuid())
+  orderId         String
+  order           PayPalOrder @relation(fields: [orderId], references: [id])
+  paypalCaptureId String      @unique
+  status          String
+  amount          Decimal     @db.Decimal(14, 2)
+  currency        String      @default("USD")
+  capturedAt      DateTime?
+  raw             Json?
+  createdAt       DateTime    @default(now())
+
+  refunds   PayPalRefund[]
+  trackings PayPalTracking[]
+}
+
+model PayPalInvoice {
+  id               String        @id @default(cuid())
+  shipmentId       String
+  shipment         Shipment      @relation(fields: [shipmentId], references: [id])
+  paypalInvoiceId  String        @unique
+  invoiceNumber    String        @unique
+  purpose          ChargePurpose
+  status           String
+  amount           Decimal       @db.Decimal(14, 2)
+  currency         String        @default("USD")
+  recipientEmail   String
+  sentAt           DateTime?
+  dueDate          DateTime?
+  paidAt           DateTime?
+  paymentReference String?
+  raw              Json?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  creditClock CreditClock?
+  refunds     PayPalRefund[]
+}
+
+model PayPalRefund {
+  id              String         @id @default(cuid())
+  paypalRefundId  String         @unique
+  captureId       String?
+  capture         PayPalCapture? @relation(fields: [captureId], references: [id])
+  invoiceId       String?
+  invoice         PayPalInvoice? @relation(fields: [invoiceId], references: [id])
+  refundRequestId String?
+  refundRequest   RefundRequest? @relation(fields: [refundRequestId], references: [id])
+  amount          Decimal        @db.Decimal(14, 2)
+  currency        String         @default("USD")
+  status          String
+  reason          String?
+  raw             Json?
+  createdAt       DateTime       @default(now())
+}
+
+model PayPalPayout {
+  id                String           @id @default(cuid())
+  shipmentId        String
+  shipment          Shipment         @relation(fields: [shipmentId], references: [id])
+  senderBatchId     String           @unique
+  payoutBatchId     String?          @unique
+  payoutItemId      String?
+  receiverEmail     String
+  amount            Decimal          @db.Decimal(14, 2)
+  currency          String           @default("USD")
+  status            String
+  approvalRequestId String?          @unique
+  approvalRequest   ApprovalRequest? @relation(fields: [approvalRequestId], references: [id])
+  raw               Json?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+}
+
+model PayPalDispute {
+  id                    String    @id @default(cuid())
+  shipmentId            String?
+  shipment              Shipment? @relation(fields: [shipmentId], references: [id])
+  paypalDisputeId       String    @unique
+  reason                String
+  status                String
+  disputeAmount         Decimal?  @db.Decimal(14, 2)
+  currency              String    @default("USD")
+  disputedTransactionId String?
+  responseDueAt         DateTime?
+  /// PayPal's dispute_outcome code once resolved, e.g. RESOLVED_BUYER_FAVOUR
+  outcome               String?
+  openedAt              DateTime?
+  resolvedAt            DateTime?
+  raw                   Json?
+  /// Created by the DEMO_MODE replay rather than the live sandbox (plan Section 14).
+  simulated             Boolean   @default(false)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  refundRequests  RefundRequest[]
+  recommendations Recommendation[]
+  evidencePacks   EvidencePack[]
+}
+
+model PayPalTracking {
+  id              String         @id @default(cuid())
+  shipmentId      String
+  shipment        Shipment       @relation(fields: [shipmentId], references: [id])
+  captureId       String?
+  capture         PayPalCapture? @relation(fields: [captureId], references: [id])
+  /// PayPal transaction (capture) id the tracker is attached to
+  transactionId   String
+  trackingNumber  String
+  carrierName     String
+  status          String
+  paypalTrackerId String?
+  raw             Json?
+  createdAt       DateTime       @default(now())
+}
+
+model WebhookEvent {
+  id                String    @id @default(cuid())
+  paypalEventId     String    @unique
+  eventType         String
+  resourceType      String?
+  resourceId        String?
+  summary           String?
+  raw               Json
+  signatureVerified Boolean
+  /// Replayed from a recording in DEMO_MODE (plan Section 14).
+  replayed          Boolean   @default(false)
+  receivedAt        DateTime  @default(now())
+  processedAt       DateTime?
+  processingError   String?
+
+  @@index([eventType, receivedAt])
+}
+
+// ---------------------------------------------------------------------------
+// Credit-day clock (lib/credit-clock)
+// ---------------------------------------------------------------------------
+
+model CreditClock {
+  id               String             @id @default(cuid())
+  invoiceId        String             @unique
+  invoice          PayPalInvoice      @relation(fields: [invoiceId], references: [id])
+  preset           JurisdictionPreset
+  acceptanceDate   DateTime
+  agreedDays       Int
+  statutoryCapDays Int?
+  dueDate          DateTime
+  statutoryDueDate DateTime?
+  status           CreditClockStatus  @default(RUNNING)
+  paidAt           DateTime?
+  /// Annual rate applied after the statutory due date (IN_MSMED: 3x RBI bank rate), in percent.
+  interestRatePct  Decimal?           @db.Decimal(6, 3)
+  interestAccrued  Decimal            @default(0) @db.Decimal(14, 2)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  reminders PaymentReminder[]
+}
+
+model PaymentReminder {
+  id            String        @id @default(cuid())
+  creditClockId String
+  creditClock   CreditClock   @relation(fields: [creditClockId], references: [id])
+  stage         ReminderStage
+  tone          String
+  subject       String
+  body          String
+  /// PAYPAL_INVOICE_REMINDER or EMAIL_STUB
+  channel       String
+  sentAt        DateTime?
+  createdAt     DateTime      @default(now())
+
+  @@unique([creditClockId, stage])
+}
+
+// ---------------------------------------------------------------------------
+// Resolution
+// ---------------------------------------------------------------------------
+
+model RefundRequest {
+  id            String              @id @default(cuid())
+  shipmentId    String
+  shipment      Shipment            @relation(fields: [shipmentId], references: [id])
+  disputeId     String?
+  dispute       PayPalDispute?      @relation(fields: [disputeId], references: [id])
+  requestedById String?
+  requestedBy   User?               @relation(fields: [requestedById], references: [id])
+  amount        Decimal             @db.Decimal(14, 2)
+  currency      String              @default("USD")
+  reason        String
+  status        RefundRequestStatus @default(OPEN)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  recommendations Recommendation[]
+  refunds         PayPalRefund[]
+}
+
+model Recommendation {
+  id                   String                 @id @default(cuid())
+  shipmentId           String
+  shipment             Shipment               @relation(fields: [shipmentId], references: [id])
+  refundRequestId      String?
+  refundRequest        RefundRequest?         @relation(fields: [refundRequestId], references: [id])
+  disputeId            String?
+  dispute              PayPalDispute?         @relation(fields: [disputeId], references: [id])
+  decision             RecommendationDecision
+  amount               Decimal                @db.Decimal(14, 2)
+  currency             String                 @default("USD")
+  reasoning            String
+  evidenceRefs         String[]
+  contractClausesCited String[]
+  confidence           Float
+  createdAt            DateTime               @default(now())
+}
+
+model EvidencePack {
+  id          String             @id @default(cuid())
+  shipmentId  String
+  shipment    Shipment           @relation(fields: [shipmentId], references: [id])
+  disputeId   String?
+  dispute     PayPalDispute?     @relation(fields: [disputeId], references: [id])
+  kind        EvidencePackKind
+  status      EvidencePackStatus @default(DRAFT)
+  markdown    String
+  /// [{ label, url, type }]
+  filesJson   Json
+  submittedAt DateTime?
+  createdAt   DateTime           @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Governance: approvals, audit, trust
+// ---------------------------------------------------------------------------
+
+/// Agents recommend; operators approve. Refunds, payouts, dispute evidence and contract finalisation all pass through here.
+model ApprovalRequest {
+  id              String             @id @default(cuid())
+  agent           AuditAgent
+  actionType      ApprovalActionType
+  shipmentId      String?
+  shipment        Shipment?          @relation(fields: [shipmentId], references: [id])
+  /// Human-readable line for the approval queue, e.g. "Refund $150.00 to Northwind Imports Inc"
+  summary         String
+  payload         Json
+  status          ApprovalStatus     @default(PENDING)
+  decidedById     String?
+  decidedBy       User?              @relation(fields: [decidedById], references: [id])
+  decidedAt       DateTime?
+  decisionNote    String?
+  executedAt      DateTime?
+  executionResult Json?
+  createdAt       DateTime           @default(now())
+
+  payout PayPalPayout?
+
+  @@index([status, createdAt])
+}
+
+/// Written for every agent action, operator decision and webhook. No exceptions (plan Section 0, rule 6).
+model AuditEvent {
+  id                String     @id @default(cuid())
+  agent             AuditAgent
+  /// What started it, e.g. "webhook:INVOICING.INVOICE.PAID" or "user:upload_pod"
+  trigger           String
+  shipmentId        String?
+  shipment          Shipment?  @relation(fields: [shipmentId], references: [id])
+  actorUserId       String?
+  actorUser         User?      @relation(fields: [actorUserId], references: [id])
+  evidenceRefs      String[]
+  reasoning         String?
+  proposedAction    String?
+  confidence        Float?
+  outcome           String?
+  approvalRequestId String?
+  /// LLM model id, when an LLM was involved
+  model             String?
+  metadata          Json?
+  createdAt         DateTime   @default(now())
+
+  @@index([shipmentId, createdAt])
+  @@index([agent, createdAt])
+}
+
+/// Computed only from platform-verified, PayPal-settled outcomes (plan Section 11).
+model TrustScore {
+  id                    String           @id @default(cuid())
+  businessId            String
+  business              Business         @relation(fields: [businessId], references: [id])
+  subjectRole           TrustSubjectRole
+  metricsJson           Json
+  confidence            TrustConfidence
+  basisTransactionCount Int
+  computedAt            DateTime         @default(now())
+
+  @@index([businessId, subjectRole, computedAt])
+}

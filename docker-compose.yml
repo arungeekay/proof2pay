@@ -1,0 +1,22 @@
+# Local Postgres for development. Port 5433 avoids clashing with a Postgres already on 5432.
+# No restart policy: the container only runs when you start it with `npm run db:up`.
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: proof2pay-postgres
+    environment:
+      POSTGRES_USER: proof2pay
+      POSTGRES_PASSWORD: proof2pay
+      POSTGRES_DB: proof2pay
+    ports:
+      - "5433:5432"
+    volumes:
+      - proof2pay-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U proof2pay -d proof2pay"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  proof2pay-pgdata:
