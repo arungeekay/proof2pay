@@ -9,7 +9,7 @@ Updated at the end of every session (plan Section 0). Current status first, then
 All free, and none needs a payment card (plan rule 11).
 
 - [ ] **GitHub:** run `gh repo create arungeekay/proof2pay --public --source . --remote origin --push` from this folder. Claude Code's auto mode won't create public repos.
-- [ ] **Gemini API key** from aistudio.google.com: put it in `.env` as `GEMINI_API_KEY`. Do not enable billing.
+- [x] **Gemini API key:** in local `.env` and tested 2026-11-02. `gemini-3.8-flash` and `gemini-3.6-flash` both answer. Paste the same key into Render when the Blueprint prompts for it.
 - [ ] **PayPal sandbox:** create three US accounts (exporter business, carrier business, buyer personal) and one app, and turn on the app's Payouts, Invoicing and Disputes features. Client id and secret go in `.env`. Account logins go in `docs/judge-credentials.md`, which is gitignored.
 - [ ] **Neon:** create the free Postgres project `proof2pay` in Singapore and copy the direct (unpooled) connection string.
 - [ ] **Render:** deploy the Blueprint (README button), pasting the Neon string and keys when prompted, then send Claude the URL. Optionally claim the hackathon credits, but never add a card.
@@ -27,7 +27,7 @@ All free, and none needs a payment card (plan rule 11).
 | Topic | Decision | Why |
 |---|---|---|
 | LLM | Google Gemini free tier, `gemini-3.8-flash` (stable, vision, tool use), behind `lib/llm.ts` | Anthropic has no free API tier. Free-tier prompts may be used by Google, which is fine because all demo data is fictional. |
-| Quota safety | `DEMO_MODE` replays recorded model output for the scripted SH-1042 flow if Gemini rate-limits, and labels it as replayed | Judging runs to Dec 15 on a free quota |
+| Quota safety | `lib/llm.ts` retries with backoff on 503 and 429, then falls back to `gemini-3.6-flash`. As a last resort, `DEMO_MODE` replays recorded output for the scripted SH-1042 flow and labels it as replayed | `gemini-3.8-flash` returned 503 "high demand" on the first test on 2026-11-02, then recovered. Judging runs to Dec 15 on a free quota. |
 | Database | Neon free Postgres (0.5 GB, scales to zero, no expiry, no card) | Render's free Postgres expires after 30 days, and paid Render needs a card |
 | Hosting | Render free web service via `render.yaml`. The build runs migrations and seeds only an empty database. Keep-alive GitHub Action pings `/api/ping` every 10 minutes | Avoids the cold start of about a minute for judges. One service uses about 744 of 750 free hours a month. |
 | APIMatic | ContextMatic MCP server declared in project `.mcp.json` (OAuth login, free) | Installing the plugin from the CLI was blocked by auto mode, and this is the same server |
