@@ -13,7 +13,8 @@
     "db:up": "docker compose up -d --wait",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
-    "db:seed": "prisma db seed"
+    "db:seed": "prisma db seed",
+    "db:seed:if-empty": "tsx prisma/seed.ts --if-empty"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.1",

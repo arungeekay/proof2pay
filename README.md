@@ -17,7 +17,15 @@ npm run db:seed            # wipe and load demo data (requires DEMO_MODE=true)
 npm run dev                # http://localhost:3000
 ```
 
-`GET /api/health` returns `{"status":"ok"}` when the app can reach the database.
+`GET /api/health` returns `{"status":"ok"}` when the app can reach the database. `GET /api/ping` checks only that the app is up.
+
+## Deploy (free)
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/arungeekay/proof2pay)
+
+- **App:** a Render free web service, defined in [render.yaml](render.yaml).
+- **Database:** a free [Neon](https://neon.tech) Postgres. Paste its direct (unpooled) connection string as `DATABASE_URL` when Render prompts for it. The build runs migrations and seeds the demo data only when the database is empty.
+- **Staying awake:** Render's free plan sleeps after 15 idle minutes. Set the repository variable `APP_URL` to the Render URL, and [keepalive.yml](.github/workflows/keepalive.yml) pings it every 10 minutes.
 
 ## Checks
 

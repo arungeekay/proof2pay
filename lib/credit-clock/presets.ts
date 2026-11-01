@@ -12,7 +12,7 @@ export interface PresetRules {
   citation: string | null;
 }
 
-// Figures from the MSMED Act, 2006, ss.15-16. Re-check against https://samadhaan.msme.gov.in before the demo.
+// Figures from the MSMED Act, 2006, ss.15-16 (checked 2026-11-02).
 export const PRESETS: Record<PresetId, PresetRules> = {
   IN_MSMED: {
     id: "IN_MSMED",
@@ -32,9 +32,10 @@ export const PRESETS: Record<PresetId, PresetRules> = {
   },
 };
 
-const DEFAULT_RBI_BANK_RATE_PCT = 5.5;
+// Bank Rate per rbi.org.in, checked 2026-11-02 (raised with the repo rate on 2026-10-07). Next MPC: 2026-12-02 to 04.
+const DEFAULT_RBI_BANK_RATE_PCT = 5.75;
 
-/** RBI bank rate in percent, from RBI_BANK_RATE_PCT. Verify against rbi.org.in before the demo. */
+/** RBI bank rate in percent, from RBI_BANK_RATE_PCT. */
 export function rbiBankRatePct(): number {
   const raw = process.env.RBI_BANK_RATE_PCT;
   const value = raw ? Number(raw) : DEFAULT_RBI_BANK_RATE_PCT;

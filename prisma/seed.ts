@@ -506,6 +506,11 @@ async function main() {
   if (process.env.DEMO_MODE !== "true") {
     throw new Error("Seeding wipes every table. Set DEMO_MODE=true to confirm.");
   }
+  // Deploys pass --if-empty so a redeploy never wipes the hosted demo.
+  if (process.argv.includes("--if-empty") && (await db.business.count()) > 0) {
+    console.log("Database already has data; skipping seed (--if-empty).");
+    return;
+  }
   await wipe();
 
   const businesses = {} as Cast["businesses"];

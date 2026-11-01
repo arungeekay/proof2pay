@@ -1,0 +1,32 @@
+# Render Blueprint (render.com > New > Blueprint, or the Deploy to Render button in the README).
+# Free web service. The database is Neon's free Postgres, passed in as DATABASE_URL, because Render's
+# free Postgres expires 30 days after creation, before judging ends on Dec 15.
+services:
+  - type: web
+    name: proof2pay
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm ci --include=dev && npm run db:deploy && npm run db:seed:if-empty && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/ping
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL
+        sync: false
+      - key: DEMO_MODE
+        value: "true"
+      - key: RBI_BANK_RATE_PCT
+        value: "5.75"
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.8-flash
+      - key: PAYPAL_ENV
+        value: sandbox
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false

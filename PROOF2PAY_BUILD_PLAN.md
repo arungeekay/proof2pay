@@ -16,6 +16,7 @@
 8. Prefer working software over breadth. A feature that is half built scores zero. Cut before the deadline, never ship broken.
 9. The PayPal integration must stay central. If a feature does not touch PayPal, it must at minimum read PayPal data or be triggered by a PayPal webhook.
 10. Use the APIMatic Context Plugin for PayPal (Section 7, Tier 1) whenever writing PayPal integration code, and record evidence (commit messages mentioning it, screenshots in `docs/evidence/`).
+11. Zero spend (added 2026-11-02). Use only free tiers, free trials, sandboxes and hackathon credits, and nothing that needs a payment card. If a planned service would cost money, pick a free equivalent and record the swap in `PROGRESS.md`.
 
 ---
 
@@ -143,14 +144,14 @@ Also seed **20 historical shipments** with mixed outcomes so dashboards and trus
 | Layer | Choice | Notes |
 |---|---|---|
 | App | **Next.js 15 (App Router, TypeScript)** | Single repo, React UI + API routes. AG Studio and Bryntum are React libraries. |
-| DB | **PostgreSQL on Render** + Prisma | Migrations committed. Seed script required. |
-| LLM | **Anthropic Claude (Sonnet or Opus)** via official SDK with tool use; vision for POD/photos | Model name goes in the Tools section of the submission. Abstract behind `lib/llm.ts` so a second provider can be swapped in. |
+| DB | **PostgreSQL on Neon (free plan)** + Prisma | Migrations committed. Seed script required. Neon instead of Render Postgres because Render's free database expires after 30 days, before judging ends (rule 11). |
+| LLM | **Google Gemini (free tier, `gemini-3.8-flash`)** with tool use; vision for POD/photos | Changed from Anthropic Claude on 2026-11-02 because Anthropic has no free API tier (rule 11). Model name goes in the Tools section of the submission. Abstract behind `lib/llm.ts` so a second provider can be swapped in. |
 | PayPal | **PayPal Agent Toolkit + PayPal MCP sandbox server** (https://github.com/paypal/AI-Toolkit) for agent tool calls; **PayPal REST (sandbox)** via `@paypal/paypal-server-sdk` or direct fetch for anything the toolkit lacks | Sandbox only. Business account = exporter. Personal sandbox account = buyer. |
 | Agent orchestration | **Render Workflows** for durable multi-step pipelines (verify → capture → invoice → reconcile → payout) | If the Workflows SDK is not available in TypeScript at build time, use a small Python worker in `workers/` with the Python SDK. |
 | Search / evidence | **Elastic serverless** (vector + keyword) | Trial starts no earlier than Nov 3 so it covers judging; extend via https://www.elastic.co/trialextension |
 | Dashboards | **AG Studio** (AG Grid) with Studio Agent Framework | Start from https://github.com/paypaldev/hackathon-paypal-ag-grid-boilerplate |
 | Timeline | **Bryntum Scheduler** (trial package `@bryntum/scheduler@npm:@bryntum/scheduler-trial`) | |
-| Hosting | **Render** web service + Postgres + Workflows | Claim credits: https://credits-portal-mmdm.onrender.com/claim/paypal-ai-hackathon |
+| Hosting | **Render** free web service (`render.yaml`) + Workflows | Claim credits: https://credits-portal-mmdm.onrender.com/claim/paypal-ai-hackathon. Paid instances need a card on file, so stay on the free plan. A GitHub Actions ping every 10 minutes stops it sleeping. |
 | Auth | Simple role switcher for demo (Exporter / Carrier / Buyer / Manager) with seeded users; magic-link optional | Do not spend time on real auth. |
 | File storage | Local `/uploads` in dev; Render disk or S3-compatible in prod | PODs and photos. |
 
@@ -199,7 +200,8 @@ proof2pay/
 
 ```
 DATABASE_URL=
-ANTHROPIC_API_KEY=
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-3.8-flash
 PAYPAL_CLIENT_ID=
 PAYPAL_CLIENT_SECRET=
 PAYPAL_ENV=sandbox
@@ -225,7 +227,7 @@ All sandbox. Verify current endpoints against https://developer.paypal.com befor
 |---|---|---|
 | **Catalog Products** | One product per contract line (goods, freight) | Needed for order/invoice line items |
 | **Orders v2** | Create with `intent: AUTHORIZE` on contract acceptance; buyer approves via sandbox checkout; `capture` on verified delivery | Freight is captured; goods go by invoice (shows both flows) |
-| **Invoicing v2** | Create draft, send, get, list, record-payment, refund; QR code optional | Credit-day clock keys off invoice `sent` date and contract acceptance date |
+| **Invoicing v2** | Create draft, send, get, list, record-payment, refund; QR code optional | Credit-day clock starts on the day goods are accepted, which is the verified delivery date (MSMED s.15). Payment AI sends the invoice that same day, with its due date set to acceptance + credit days. Decided 2026-11-02. |
 | **Add Tracking (Shipment Tracking)** | Delivery AI posts carrier + tracking number + status `DELIVERED` against the capture | Strengthens dispute position; shows in PayPal |
 | **Payouts** | Carrier payout after verified delivery (operator approved) | Sandbox payouts to a second sandbox account |
 | **Payments v2 (refunds)** | Partial/full refund on capture | Resolution AI recommends, operator approves |
@@ -392,7 +394,7 @@ Today is referenced from `PROGRESS.md`. Each day ends with a commit, passing tes
 
 | Dates (IST) | Deliverable | Acceptance criteria |
 |---|---|---|
-| **Oct 31 to Nov 2** | Foundation | Repo, Next.js, Prisma, Postgres on Render, seed data (20 shipments). PayPal sandbox accounts + app + webhook. `lib/paypal` with Orders (authorize/capture), Invoicing (create/send/get), Webhook verification, Payouts, Refunds. PayPal MCP client working with one tool call from a test route. APIMatic plugin installed, first evidence screenshot. Deployed skeleton on Render. |
+| **Oct 31 to Nov 2** | Foundation | Repo, Next.js, Prisma, hosted Postgres (Neon), seed data (20 shipments). PayPal sandbox accounts + app + webhook. `lib/paypal` with Orders (authorize/capture), Invoicing (create/send/get), Webhook verification, Payouts, Refunds. PayPal MCP client working with one tool call from a test route. APIMatic plugin installed, first evidence screenshot. Deployed skeleton on Render. |
 | **Nov 3 to 5** | Contract AI + Delivery AI | Contract drafted, flagged, accepted by two roles, order authorized. POD upload with vision extraction, verification report, Add Tracking call succeeds. Bryntum timeline renders from shipment + moves on `PAYMENT.CAPTURE.COMPLETED`. Elastic trial started Nov 3, indexing works. Credit-clock engine with unit tests. |
 | **Nov 6 to 8** | Payment AI + Resolution AI | Capture + invoice on verification, clock running, reminders drafted. Invoice paid in sandbox → webhook → reconcile → payout ApprovalRequest → approve → payout executes. Refund request → recommendation → approve → refund executes. Sandbox dispute → evidence pack → provide-evidence call. Simulated insurer quote + claim. Audit trail page complete. |
 | **Nov 9 to 10** | AG Studio + Trust + Workflows | Command center with agent framework answering 3 scripted prompts; 3 custom widgets; theme. Trust profiles live. Render Workflows running the delivery→payment pipeline. Dispute triage board. Tier 2 items if ahead. |
@@ -410,7 +412,7 @@ If any day slips by more than one day, cut from the bottom: Tier 3 → Tier 2 �
 - **Project name:** Proof2Pay
 - **Tagline (one line):** AI agents that turn a shipment into a signed contract, a verified delivery, a PayPal settlement, and a public track record.
 - **About the project:** Inspiration, what it does, how we built it (name every PayPal API and every sponsor tool with its role), challenges, accomplishments, what we learned, what's next. 400 to 700 words.
-- **Built with:** nextjs, typescript, postgresql, prisma, paypal, paypal-agent-toolkit, paypal-mcp, anthropic-claude, ag-grid, ag-studio, bryntum, render, render-workflows, elastic, apimatic, postman, zapier (only list what is actually used).
+- **Built with:** nextjs, typescript, postgresql, prisma, paypal, paypal-agent-toolkit, paypal-mcp, google-gemini, neon, ag-grid, ag-studio, bryntum, render, render-workflows, elastic, apimatic, postman, zapier (only list what is actually used).
 - **Tools (required):** which AI model(s) and services, how each was used, including the APIMatic Context Plugin and Claude Code as development tools.
 - **Try it out links:** hosted URL, GitHub repo, Postman collection.
 - **Video link:** YouTube.
@@ -462,6 +464,8 @@ Say the words "PayPal", "agent", "AG Studio", "Bryntum", "Render", "Elastic", "A
 | Scope creep | Section 0 rule 5. Anything new goes into `docs/backlog.md`, not the build. |
 | Video over 3 minutes | Script timed; cut the trust profile segment first if needed. |
 | Judges cannot run locally | Hosted URL is primary; README local run tested on a fresh clone on Nov 11. |
+| Gemini free-tier quota runs out during judging | `lib/llm.ts` records the model's responses for the scripted SH-1042 demo. In `DEMO_MODE` it replays them when the API returns a rate-limit error, and the UI labels the replayed output. |
+| Render free instance sleeps or runs out of hours | Keep-alive workflow pings `/api/ping` (no DB, so Neon still scales to zero). One always-on service uses about 744 of the 750 free hours a month, so add no second free web service. |
 
 ---
 
