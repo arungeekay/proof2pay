@@ -57,6 +57,9 @@ Checked 2026-11-02: MSMED s.15 caps a written period at 45 days from acceptance 
 - Added the APIMatic ContextMatic MCP server in `.mcp.json`. Its endpoint answers with an OAuth challenge, so it needs a one-time login.
 - RBI bank rate default moved from 5.50% to 5.75% in `lib/credit-clock/presets.ts`, `.env.example` and `.env`.
 - Verified: lint, typecheck, 27 tests, `next build`. The full Render build sequence (migrate, seed-if-empty twice) ran against an empty database: it seeded the first time and skipped the second.
+- Installed the Neon agent skills locally (`npx neon skills -y`: `neon`, `neon-postgres` and 7 others). They are gitignored because `.claude/skills` holds absolute symlinks, so rerun the command on another machine.
+  - We use only Lakebase Postgres. Neon Auth, Functions, Object Storage and the AI Gateway are out of scope.
+  - Neon advises a pooled URL for app traffic and a direct one for migrations. We keep one direct `DATABASE_URL` because the app is a long-running Node server with a 10-connection pool, not serverless.
 
 ### 2026-10-31
 

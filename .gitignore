@@ -49,3 +49,8 @@ next-env.d.ts
 
 # sandbox logins for judges: paste into Devpost, never commit
 docs/judge-credentials.md
+
+# Neon agent skills, installed locally with `npx neon skills -y`; .claude/skills holds absolute symlinks
+/.agents/
+/.claude/skills/
+/skills-lock.json
