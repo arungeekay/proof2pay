@@ -24,7 +24,7 @@ npm run dev                # http://localhost:3000
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/arungeekay/proof2pay)
 
 - **App:** a Render free web service, defined in [render.yaml](render.yaml).
-- **Database:** a free [Neon](https://neon.tech) Postgres. Paste its direct (unpooled) connection string as `DATABASE_URL` when Render prompts for it. The build runs migrations and seeds the demo data only when the database is empty.
+- **Database:** a free [Neon](https://neon.tech) Postgres. When Render prompts, paste the pooled connection string as `DATABASE_URL` and the direct one as `DATABASE_URL_UNPOOLED`. `neon env pull` prints both. The app uses the pooled string; Prisma Migrate uses the direct one. The build runs migrations and seeds the demo data only when the database is empty.
 - **Staying awake:** Render's free plan sleeps after 15 idle minutes. Set the repository variable `APP_URL` to the Render URL, and [keepalive.yml](.github/workflows/keepalive.yml) pings it every 10 minutes.
 
 ## Checks

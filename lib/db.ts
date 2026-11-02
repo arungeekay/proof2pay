@@ -3,6 +3,7 @@ import { PrismaClient } from "@/generated/prisma/client";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
+// node-postgres suits a long-running Node server (Render). On Neon, DATABASE_URL is the pooled (-pooler) string.
 function createClient() {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) throw new Error("DATABASE_URL is not set (see .env.example)");

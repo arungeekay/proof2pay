@@ -1,6 +1,7 @@
 # Render Blueprint (render.com > New > Blueprint, or the Deploy to Render button in the README).
-# Free web service. The database is Neon's free Postgres, passed in as DATABASE_URL, because Render's
-# free Postgres expires 30 days after creation, before judging ends on Dec 15.
+# Free web service. The database is Neon's free Postgres (project patient-math-88954862, branch production),
+# because Render's free Postgres expires 30 days after creation, before judging ends on Dec 15.
+# DATABASE_URL = Neon pooled string (app traffic); DATABASE_URL_UNPOOLED = direct string (migrations).
 services:
   - type: web
     name: proof2pay
@@ -15,6 +16,8 @@ services:
       - key: NODE_VERSION
         value: "22"
       - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_URL_UNPOOLED
         sync: false
       - key: DEMO_MODE
         value: "true"

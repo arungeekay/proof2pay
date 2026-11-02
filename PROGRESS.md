@@ -11,8 +11,8 @@ All free, and none needs a payment card (plan rule 11).
 - [ ] **GitHub:** run `gh repo create arungeekay/proof2pay --public --source . --remote origin --push` from this folder. Claude Code's auto mode won't create public repos.
 - [x] **Gemini API key:** in local `.env` and tested 2026-11-02. `gemini-3.8-flash` and `gemini-3.6-flash` both answer. Paste the same key into Render when the Blueprint prompts for it.
 - [ ] **PayPal sandbox:** create three US accounts (exporter business, carrier business, buyer personal) and one app, and turn on the app's Payouts, Invoicing and Disputes features. Client id and secret go in `.env`. Account logins go in `docs/judge-credentials.md`, which is gitignored.
-- [ ] **Neon:** create the free Postgres project `proof2pay` in Singapore and copy the direct (unpooled) connection string.
-- [ ] **Render:** deploy the Blueprint (README button), pasting the Neon string and keys when prompted, then send Claude the URL. Optionally claim the hackathon credits, but never add a card.
+- [x] **Neon:** project `patient-math-88954862` (AWS Singapore, branch `production`), linked with `neon init`. Migrated and seeded 2026-11-02 (21 shipments).
+- [ ] **Render:** deploy the Blueprint (README button), then send Claude the URL. When prompted, paste `DATABASE_URL` (Neon pooled), `DATABASE_URL_UNPOOLED` (Neon direct) and the keys. `neon env pull` prints both Neon strings. Optionally claim the hackathon credits, but never add a card.
 - [ ] **APIMatic:** reload the window, approve the `context-matic` MCP server from `.mcp.json`, then authenticate it in `/mcp` with a free APIMatic account. Also fill in the Devpost APIMatic form.
 - [ ] **AG Studio:** request the 45-day trial today; started Nov 2, it lasts to Dec 17. The licence key goes in `.env` as `AG_STUDIO_LICENSE_KEY`.
 - [ ] **Elastic (Nov 3, not before):** start the trial via https://ela.st/elastic-paypal-hackathon. `ELASTIC_URL` and `ELASTIC_API_KEY` go in `.env`. Extend it around Nov 15 at https://www.elastic.co/trialextension.
@@ -28,7 +28,7 @@ All free, and none needs a payment card (plan rule 11).
 |---|---|---|
 | LLM | Google Gemini free tier, `gemini-3.8-flash` (stable, vision, tool use), behind `lib/llm.ts` | Anthropic has no free API tier. Free-tier prompts may be used by Google, which is fine because all demo data is fictional. |
 | Quota safety | `lib/llm.ts` retries with backoff on 503 and 429, then falls back to `gemini-3.6-flash`. As a last resort, `DEMO_MODE` replays recorded output for the scripted SH-1042 flow and labels it as replayed | `gemini-3.8-flash` returned 503 "high demand" on the first test on 2026-11-02, then recovered. Judging runs to Dec 15 on a free quota. |
-| Database | Neon free Postgres (0.5 GB, scales to zero, no expiry, no card) | Render's free Postgres expires after 30 days, and paid Render needs a card |
+| Database | Neon free Postgres (0.5 GB, scales to zero, no expiry, no card). The app uses the pooled `DATABASE_URL` through Prisma's `pg` adapter. Prisma Migrate uses `DATABASE_URL_UNPOOLED`, falling back to `DATABASE_URL` for local Docker. | Render's free Postgres expires after 30 days, and paid Render needs a card. Neon's skill: `node-postgres` suits a long-running server, and migrations must not run through PgBouncer. |
 | Hosting | Render free web service via `render.yaml`. The build runs migrations and seeds only an empty database. Keep-alive GitHub Action pings `/api/ping` every 10 minutes | Avoids the cold start of about a minute for judges. One service uses about 744 of 750 free hours a month. |
 | APIMatic | ContextMatic MCP server declared in project `.mcp.json` (OAuth login, free) | Installing the plugin from the CLI was blocked by auto mode, and this is the same server |
 | Credit clock start | Day of acceptance of goods, which is the verified delivery date. The invoice is sent the same day, due acceptance + credit days | MSMED s.15 counts from acceptance; the seed already does this |
@@ -59,7 +59,11 @@ Checked 2026-11-02: MSMED s.15 caps a written period at 45 days from acceptance 
 - Verified: lint, typecheck, 27 tests, `next build`. The full Render build sequence (migrate, seed-if-empty twice) ran against an empty database: it seeded the first time and skipped the second.
 - Installed the Neon agent skills locally (`npx neon skills -y`: `neon`, `neon-postgres` and 7 others). They are gitignored because `.claude/skills` holds absolute symlinks, so rerun the command on another machine.
   - We use only Lakebase Postgres. Neon Auth, Functions, Object Storage and the AI Gateway are out of scope.
-  - Neon advises a pooled URL for app traffic and a direct one for migrations. We keep one direct `DATABASE_URL` because the app is a long-running Node server with a 10-connection pool, not serverless.
+- Set up Neon with `neon init` and `neon deploy`, which wrote `neon.ts`, the gitignored `.neon` link, and `DATABASE_URL`, `DATABASE_URL_UNPOOLED` and `NEON_BRANCH` in `.env`.
+  - `prisma.config.ts` now migrates over the direct URL. `render.yaml` and the README ask for both URLs.
+  - Proof: `db:deploy` ran on the direct host, and the seed ran over the pooler. Build passed. `next start` served `/api/ping` and `/api/health` with 200, and the home page showed 21 shipments and SH-1042 DRAFT. Both URLs reach Neon (134 `neon.*` settings, 21 shipments).
+  - `neon init` also installed the user-scope Claude Code plugin `neon@neon` (same skills plus the Neon MCP server at mcp.neon.tech).
+  - **Caution:** local `.env` now points at the Neon `production` branch, which the hosted demo will use. `npm run db:seed` wipes it. For throwaway local work, switch `DATABASE_URL` back to Docker (see `.env.example`) or use `neon checkout dev --create`.
 
 ### 2026-10-31
 

@@ -17,6 +17,8 @@
     "db:seed:if-empty": "tsx prisma/seed.ts --if-empty"
   },
   "dependencies": {
+    "@neon/config": "^1.10.0",
+    "@neon/env": "^1.6.8",
     "@prisma/adapter-pg": "7.10.1",
     "@prisma/client": "7.10.1",
     "class-variance-authority": "^0.7.1",
