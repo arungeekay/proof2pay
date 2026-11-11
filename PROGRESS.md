@@ -10,7 +10,6 @@ The plan changed on Nov 11 to the v2 scope in `PROOF2PAY_BUILD_PLAN.md` Section 
 ### Waiting on Arun (in this order)
 
 - [ ] **PayPal sandbox (tonight):** developer.paypal.com > Apps & Credentials > Sandbox > Create App. Put the client id and secret in `.env` as `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET`. Put the sandbox **Personal** account email in `PAYPAL_SANDBOX_BUYER_EMAIL` (invoices go there). Logins go in `docs/judge-credentials.md`.
-- [ ] **Push:** `git push` (commits are local).
 - [ ] **Render:** deploy the Blueprint (README button). Paste both Neon URLs, the Gemini key, the PayPal keys and `PAYPAL_SANDBOX_BUYER_EMAIL`. Send Claude the URL.
 - [ ] **Pay as the buyer:** on the hosted app, open the SH-1042 invoice link and pay with the sandbox Personal account.
 - [ ] **Video and Devpost** (14:00 to 18:00 on Nov 12).
@@ -61,6 +60,13 @@ Render is not affected. Changing Windows DNS to 1.1.1.1 removes the need for bot
   - Seed: Kaveri Auto Components (IN) and SH-1039 as the domestic overdue sale.
 - Verified: lint, typecheck, 39 tests, `next build`. `npm run e2e` against Neon ran all three scenarios: MSMED rule blocked Net 60; both parties accepted Net 30; Gemini vision read the POD and found the dented carton; invoice approved and sent (mocked); payment; Resolution AI recommended $300 of the $400 asked; refund, simulated insurance claim and dispute evidence approved; domestic final notice and MSME package (Rs 5,425.48 interest at 17.25%). 30 audit events. Every page returned 200. Two Gemini calls hit 503 and used labelled sample output.
 - Neon reseeded clean afterwards.
+- Late session (Nov 11 to 12, after "do everything yourself"): pushed to GitHub. Browser click-through with Playwright (outside the repo) as each persona passed all three scenarios. Added:
+  - the command center (Gemini turns a question into a read-only query spec; AG Grid shows it)
+  - a "Reset demo data" button (DEMO_MODE)
+  - a Gemini model chain (3.6-flash, then the lite models; 3.6 hit its free quota during testing)
+  - `docs/demo-script.md`, `docs/devpost-submission.md`, screenshots in `docs/screenshots`, and the final README
+
+  40 tests pass.
 
 ### 2026-11-02
 

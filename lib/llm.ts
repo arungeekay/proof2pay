@@ -37,8 +37,18 @@ class RetryableError extends Error {}
 const UNHEALTHY_MS = 5 * 60_000;
 const unhealthyUntil = new Map<string, number>();
 
-const primaryModel = () => process.env.GEMINI_MODEL || "gemini-3.8-flash";
-const fallbackModel = () => process.env.GEMINI_FALLBACK_MODEL || "gemini-3.6-flash";
+// Each free-tier model has its own quota, so a chain of models multiplies the free capacity for judging.
+const DEFAULT_CHAIN = "gemini-3.6-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-flash-lite-latest,gemini-3.8-flash";
+
+/** Models in the order to try: GEMINI_MODEL first, then GEMINI_FALLBACK_MODELS (comma-separated). */
+export function modelChain(): string[] {
+  const list = [process.env.GEMINI_MODEL, ...(process.env.GEMINI_FALLBACK_MODELS ?? process.env.GEMINI_FALLBACK_MODEL ?? DEFAULT_CHAIN).split(",")]
+    .map((m) => m?.trim())
+    .filter((m): m is string => Boolean(m));
+  return [...new Set(list)];
+}
+
+class QuotaError extends Error {}
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Strips a ```json fence if the model added one. */
@@ -67,7 +77,8 @@ async function callGemini(model: string, system: string, userText: string, image
     }),
     signal: AbortSignal.timeout(images.length ? 45_000 : 30_000),
   });
-  if (response.status === 429 || response.status >= 500) {
+  if (response.status === 429) throw new QuotaError(`${model} is rate-limited or out of free quota (HTTP 429)`);
+  if (response.status >= 500) {
     throw new RetryableError(`${model} returned HTTP ${response.status}`);
   }
   if (!response.ok) {
@@ -99,7 +110,7 @@ export async function generateJson<S extends z.ZodType>(options: GenerateJsonOpt
     `${options.prompt}\n\nRespond with only a JSON object that matches this JSON Schema:\n` +
     JSON.stringify(z.toJSONSchema(options.schema));
   const errors: string[] = [];
-  const models = [...new Set([primaryModel(), fallbackModel()])];
+  const models = modelChain();
   // Skip a model that failed in the last few minutes, unless every model has.
   const healthy = models.filter((model) => (unhealthyUntil.get(model) ?? 0) < Date.now());
 
@@ -117,6 +128,7 @@ export async function generateJson<S extends z.ZodType>(options: GenerateJsonOpt
         errors.push(`${model}: output did not match the schema (${parsed.error.issues[0]?.message ?? "invalid"})`);
       } catch (error) {
         errors.push(`${model}: ${error instanceof Error ? error.message : String(error)}`);
+        if (error instanceof QuotaError) break; // no point retrying a spent quota: next model
         // A hung request (timeout) or a 4xx other than 429 will not improve on retry: move to the next model.
         const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
         if (timedOut || (!(error instanceof RetryableError) && !(error instanceof SyntaxError))) break;

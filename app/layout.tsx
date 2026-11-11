@@ -25,6 +25,7 @@ const NAV = [
   ["/receivables", "Receivables"],
   ["/trust", "Trust"],
   ["/audit", "Audit trail"],
+  ["/command-center", "Command center"],
 ] as const;
 
 const ROLE_LABEL = { EXPORTER: "Exporter", CARRIER: "Carrier", BUYER: "Buyer", MANAGER: "Finance manager" } as const;
@@ -54,7 +55,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
               <PersonaSwitcher
                 currentId={user.id}
                 action={switchPersona}
-                personas={personas.map((p) => ({ id: p.id, label: `${p.name} · ${ROLE_LABEL[p.role]}, ${p.business.name.split(" ").slice(0, 2).join(" ")}` }))}
+                personas={personas.map((p) => ({ id: p.id, label: `${p.name} · ${ROLE_LABEL[p.role]}` }))}
               />
             </div>
           </div>

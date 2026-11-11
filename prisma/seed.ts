@@ -523,14 +523,10 @@ async function wipe() {
   await db.$executeRawUnsafe(`TRUNCATE TABLE ${tables} RESTART IDENTITY CASCADE`);
 }
 
-async function main() {
+/** Wipes every table and loads the demo. Also used by the in-app "Reset demo data" button (DEMO_MODE only). */
+export async function seedDemo() {
   if (process.env.DEMO_MODE !== "true") {
     throw new Error("Seeding wipes every table. Set DEMO_MODE=true to confirm.");
-  }
-  // Deploys pass --if-empty so a redeploy never wipes the hosted demo.
-  if (process.argv.includes("--if-empty") && (await db.business.count()) > 0) {
-    console.log("Database already has data; skipping seed (--if-empty).");
-    return;
   }
   await wipe();
 
@@ -561,9 +557,21 @@ async function main() {
   );
 }
 
-main()
-  .catch((error) => {
-    console.error(error);
-    process.exitCode = 1;
-  })
-  .finally(() => db.$disconnect());
+async function main() {
+  // Deploys pass --if-empty so a redeploy never wipes the hosted demo.
+  if (process.argv.includes("--if-empty") && (await db.business.count()) > 0) {
+    console.log("Database already has data; skipping seed (--if-empty).");
+    return;
+  }
+  await seedDemo();
+}
+
+// Run only as a script (tsx / prisma db seed), not when the Next.js server imports seedDemo.
+if (!process.env.NEXT_RUNTIME) {
+  main()
+    .catch((error) => {
+      console.error(error);
+      process.exitCode = 1;
+    })
+    .finally(() => db.$disconnect());
+}

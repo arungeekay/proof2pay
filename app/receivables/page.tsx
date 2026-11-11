@@ -35,6 +35,8 @@ export default async function ReceivablesPage() {
       reminders: clock?._count.reminders ?? 0,
     };
   });
+  // Open invoices first (most overdue at the top), then settled ones, newest first.
+  rows.sort((a, b) => (a.status === "PAID" ? 1 : 0) - (b.status === "PAID" ? 1 : 0) || (a.status === "PAID" ? b.dueDate.localeCompare(a.dueDate) : a.dueDate.localeCompare(b.dueDate)));
   return (
     <div className="flex flex-col gap-4">
       <div>

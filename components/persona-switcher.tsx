@@ -14,7 +14,7 @@ export function PersonaSwitcher({
   const formRef = useRef<HTMLFormElement>(null);
   return (
     <form ref={formRef} action={action} className="flex items-center gap-2 text-sm">
-      <label htmlFor="persona" className="text-muted-foreground hidden sm:inline">
+      <label htmlFor="persona" className="text-muted-foreground hidden xl:inline">
         Acting as
       </label>
       <select

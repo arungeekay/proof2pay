@@ -1,6 +1,7 @@
 import { ArrowRight, CircleAlert, FileCheck2, PackageCheck, Scale } from "lucide-react";
 import Link from "next/link";
-import { switchPersona } from "@/app/actions";
+import { resetDemoAction, switchPersona } from "@/app/actions";
+import { ActionForm } from "@/components/action-form";
 import { SimTag, StatusBadge, Tag } from "@/components/status";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -158,6 +159,13 @@ export default async function Home() {
           ))}
         </div>
       </section>
+
+      {process.env.DEMO_MODE === "true" && (
+        <section className="text-muted-foreground flex flex-col gap-2 border-t pt-4 text-sm">
+          <p>Judges share this demo. If SH-1042 has already been run through, reset it to start the scenarios again (takes about a minute).</p>
+          <ActionForm action={resetDemoAction} label="Reset demo data" variant="outline" pendingLabel="Reloading the demo data…" />
+        </section>
+      )}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { keywordSpec } from "@/lib/agents/command-spec";
 import { consigneeMatches, matchDelivery, type PodExtraction } from "@/lib/agents/delivery-match";
 import { decideClaim, quoteCargoInsurance } from "@/lib/insurer-sim";
 import { extractJson } from "@/lib/llm";
@@ -112,5 +113,16 @@ describe("LLM output parsing", () => {
   it("accepts bare JSON and fenced JSON", () => {
     expect(extractJson('{"a":1}')).toEqual({ a: 1 });
     expect(extractJson('```json\n{"a":2}\n```')).toEqual({ a: 2 });
+  });
+});
+
+describe("command center keyword fallback", () => {
+  it("reads the scripted questions without Gemini", () => {
+    expect(keywordSpec("Show disputed shipments over $10,000 with insurance attached")).toMatchObject({
+      dataset: "shipments",
+      filters: { minAmount: 10000, disputedOnly: true, insuredOnly: true, currency: "USD" },
+    });
+    expect(keywordSpec("Which invoices are overdue?")).toMatchObject({ dataset: "invoices", filters: { overdueOnly: true } });
+    expect(keywordSpec("What is waiting for my approval?").dataset).toBe("approvals");
   });
 });

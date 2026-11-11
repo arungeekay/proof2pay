@@ -150,3 +150,28 @@ export async function disputeResponseAction(_: ActionResult, form: FormData) {
     return "Evidence pack prepared and sent to the approval queue.";
   });
 }
+
+export type CommandState = ({ ok: true } & import("@/lib/agents/command").CommandResult) | { ok: false; message: string } | null;
+
+export async function commandCenterAction(_: CommandState, form: FormData): Promise<CommandState> {
+  try {
+    const { askCommandCenter } = await import("@/lib/agents/command");
+    return { ok: true, ...(await askCommandCenter(field(form, "question"), await currentUser())) };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+let lastReset = 0;
+
+export async function resetDemoAction(): Promise<ActionResult> {
+  return run(async () => {
+    if (process.env.DEMO_MODE !== "true") throw new Error("Reset is available only in DEMO_MODE.");
+    if (Date.now() - lastReset < 60_000) throw new Error("The demo was reset less than a minute ago.");
+    lastReset = Date.now();
+    const { seedDemo } = await import("@/prisma/seed");
+    await seedDemo();
+    (await cookies()).delete(SESSION_COOKIE);
+    return "Demo data reset: SH-1042 is a draft again and SH-1039 is overdue.";
+  });
+}

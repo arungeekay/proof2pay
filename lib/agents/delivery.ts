@@ -112,7 +112,7 @@ export async function verifyDelivery(shipmentId: string, files: UploadedFile[], 
     match.status === "FAILED"
       ? `Delivery could not be verified: ${match.discrepancies.filter((d) => d.severity === "MAJOR").map((d) => d.note).join(" ")}`
       : match.discrepancies.length
-        ? `POD matches the consignee and contract, with ${match.discrepancies.length} discrepanc${match.discrepancies.length > 1 ? "ies" : "y"}: ${match.discrepancies.map((d) => d.observed).join("; ")}.`
+        ? `POD matches the consignee and contract, with ${match.discrepancies.length} discrepanc${match.discrepancies.length > 1 ? "ies" : "y"}: ${match.discrepancies.map((d) => d.observed.replace(/\.+$/, "")).join("; ")}.`
         : "POD matches the contract: consignee, quantity, condition and date all agree.";
 
   const report = await db.verificationReport.create({

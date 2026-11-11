@@ -42,6 +42,8 @@ import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
+const PACK_LABEL = { MSME_SAMADHAAN: "MSME delayed-payment evidence package", DISPUTE_RESPONSE: "Dispute response evidence pack", INSURANCE_CLAIM: "Insurance claim pack" } as const;
+
 async function load(id: string) {
   return db.shipment.findUnique({
     where: { id },
@@ -620,7 +622,7 @@ function EvidencePacks({ packs }: { packs: Shipment["evidencePacks"] }) {
       <CardContent className="flex flex-col gap-1 text-sm">
         {packs.map((p) => (
           <Link key={p.id} href={`/evidence/${p.id}`} className="text-primary flex items-center gap-2 hover:underline">
-            {humanize(p.kind)} · {dateTime(p.createdAt)} <StatusBadge status={p.status} />
+            {PACK_LABEL[p.kind]} · {dateTime(p.createdAt)} <StatusBadge status={p.status} />
           </Link>
         ))}
       </CardContent>

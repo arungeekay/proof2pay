@@ -51,7 +51,7 @@ const receivableColumns: ColDef<ReceivableRow>[] = [
   { field: "buyer", flex: 1, minWidth: 180, filter: true },
   { field: "channel", width: 140, filter: true, valueFormatter: (p) => (p.value === "MANUAL_RECORD" ? "Manual record" : "PayPal") },
   { field: "amount", width: 140, type: "rightAligned", valueFormatter: (p) => fmt(p.data!.currency, p.value) },
-  { field: "dueDate", headerName: "Due", width: 120, sort: "asc" },
+  { field: "dueDate", headerName: "Due", width: 120 },
   {
     field: "daysToDue",
     headerName: "Days to due",
