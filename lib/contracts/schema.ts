@@ -43,12 +43,14 @@ export const ContractClausesSchema = z.object({
   payment: z.object({
     freight: z.object({
       amount: z.number().nonnegative(),
-      method: z.literal("PAYPAL_ORDER_AUTHORIZE_CAPTURE"),
+      // PAYPAL_INVOICE_LINE: freight billed to the buyer on the PayPal goods invoice (v2 scope).
+      // MANUAL_RECORD: Indian domestic trade, which PayPal does not settle; payment is entered as a verified record.
+      method: z.enum(["PAYPAL_ORDER_AUTHORIZE_CAPTURE", "PAYPAL_INVOICE_LINE", "MANUAL_RECORD"]),
       trigger: z.string().min(1),
     }),
     goods: z.object({
       amount: z.number().positive(),
-      method: z.enum(["PAYPAL_INVOICE", "PAYPAL_ORDER_CAPTURE"]),
+      method: z.enum(["PAYPAL_INVOICE", "PAYPAL_ORDER_CAPTURE", "MANUAL_RECORD"]),
       trigger: z.string().min(1),
     }),
   }),

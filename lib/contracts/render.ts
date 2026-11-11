@@ -1,7 +1,7 @@
 import type { ContractClauses } from "./schema";
 
 const money = (amount: number, currency: string) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amount);
+  new Intl.NumberFormat(currency === "INR" ? "en-IN" : "en-US", { style: "currency", currency }).format(amount);
 
 const PARTY_LABEL = { EXPORTER: "Exporter", CARRIER: "Carrier", BUYER: "Buyer" } as const;
 
@@ -9,8 +9,16 @@ const PARTY_LABEL = { EXPORTER: "Exporter", CARRIER: "Carrier", BUYER: "Buyer" }
 export function renderContractMarkdown(reference: string, version: number, c: ContractClauses): string {
   const { exporter, carrier, buyer } = c.identities;
   const currency = c.cargo.currency;
-  const goodsMethod =
-    c.payment.goods.method === "PAYPAL_INVOICE" ? "PayPal invoice" : "PayPal order (authorize, then capture)";
+  const goodsMethod = {
+    PAYPAL_INVOICE: "PayPal invoice",
+    PAYPAL_ORDER_CAPTURE: "PayPal order (authorize, then capture)",
+    MANUAL_RECORD: "Domestic bank transfer, recorded in Proof2Pay as a manually verified payment",
+  }[c.payment.goods.method];
+  const freightMethod = {
+    PAYPAL_ORDER_AUTHORIZE_CAPTURE: "PayPal order authorized at acceptance of this contract.",
+    PAYPAL_INVOICE_LINE: "Billed to the buyer as a line on the PayPal invoice; the exporter pays the carrier.",
+    MANUAL_RECORD: "Paid by the exporter to the carrier by domestic transfer.",
+  }[c.payment.freight.method];
 
   return [
     `# Shipment contract ${reference} (version ${version})`,
@@ -36,7 +44,7 @@ export function renderContractMarkdown(reference: string, version: number, c: Co
     `- **Condition standard:** ${c.delivery.conditionStandard}`,
     ``,
     `## 5. Payment terms`,
-    `- **Freight (${money(c.payment.freight.amount, currency)}):** PayPal order authorized at acceptance of this contract. ${c.payment.freight.trigger}`,
+    `- **Freight (${money(c.payment.freight.amount, currency)}):** ${freightMethod} ${c.payment.freight.trigger}`,
     `- **Goods (${money(c.payment.goods.amount, currency)}):** ${goodsMethod}. ${c.payment.goods.trigger}`,
     ``,
     `## 6. Credit period`,

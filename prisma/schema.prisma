@@ -65,6 +65,13 @@ enum ChargePurpose {
   FREIGHT
 }
 
+/// PAYPAL: a real PayPal invoice. MANUAL_RECORD: an Indian domestic invoice, which PayPal cannot settle,
+/// tracked with the same credit clock; payment is entered by an operator as a manually verified record.
+enum PaymentChannel {
+  PAYPAL
+  MANUAL_RECORD
+}
+
 enum EvidenceType {
   POD
   PHOTO
@@ -93,6 +100,8 @@ enum ReminderStage {
   T_MINUS_1
   T_PLUS_1
   T_PLUS_15
+  /// Drafted by Payment AI once every scheduled stage has passed and the invoice is still unpaid.
+  FINAL_NOTICE
 }
 
 enum InsurancePolicyStatus {
@@ -121,6 +130,8 @@ enum RecommendationDecision {
   FULL
   PARTIAL
   NONE
+  /// Evidence is insufficient or contradictory: a person must look before any refund.
+  INVESTIGATE
 }
 
 enum EvidencePackKind {
@@ -141,6 +152,8 @@ enum ApprovalActionType {
   DISPUTE_EVIDENCE
   DISPUTE_ACCEPT_CLAIM
   CONTRACT_FINALISE
+  INVOICE_SEND
+  INSURANCE_CLAIM
 }
 
 enum ApprovalStatus {
@@ -435,10 +448,13 @@ model PayPalInvoice {
   paypalInvoiceId  String        @unique
   invoiceNumber    String        @unique
   purpose          ChargePurpose
+  channel          PaymentChannel @default(PAYPAL)
   status           String
   amount           Decimal       @db.Decimal(14, 2)
   currency         String        @default("USD")
   recipientEmail   String
+  /// PayPal's payer-facing link for the invoice, when sent through PayPal.
+  payerViewUrl     String?
   sentAt           DateTime?
   dueDate          DateTime?
   paidAt           DateTime?

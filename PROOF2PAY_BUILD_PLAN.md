@@ -484,3 +484,22 @@ Say the words "PayPal", "agent", "AG Studio", "Bryntum", "Render", "Elastic", "A
 ## 16. First session kick-off prompt (paste into Claude Code)
 
 > Read `PROOF2PAY_BUILD_PLAN.md` in full. Create `PROGRESS.md` with today's date and the Day 1 task list from Section 12. Then scaffold the repo per Section 4.2 (Next.js 15, TypeScript, Prisma, Tailwind, shadcn/ui), add the MIT LICENSE, `.env.example` from Section 4.3, and the Prisma schema from Section 9. Stop and show me the plan before installing any sponsor packages.
+
+---
+
+## 17. v2 scope (Nov 11, from `Proof2pay.pdf`): this section overrides earlier sections where they differ
+
+With 20 hours left, the build follows the Nov 10 plan's framing on the existing stack.
+
+**Three demo scenarios** (replace the 10-step script in Section 3):
+1. **Successful shipment (SH-1042, PayPal sandbox):** Contract AI drafts from the fixed clause library and flags issues (MSMED cap blocks Net 60); exporter and buyer accept the same hash; simulated insurance quote bound on acceptance; carrier confirms pickup and uploads the POD; Delivery AI (Gemini vision) verifies; Payment AI proposes the invoice; an operator approves; PayPal Invoicing sends it; the buyer pays in sandbox; the verified webhook (or a re-read) marks it paid; tracking is added to the PayPal transaction; trust profiles update.
+2. **Delayed payment (SH-1039, Indian domestic, manual record):** INR invoice 28 days overdue; credit clock with MSMED s.16 interest; Payment AI drafts the final notice; MSME evidence package ("not a government filing"); payment can only be entered as a manually verified record with a bank reference.
+3. **Damage and dispute (SH-1042 after payment):** buyer requests $400 for a dented carton; Resolution AI recommends the pro-rata $300 with cited evidence; operator approves; PayPal refund; simulated insurance claim (approved by an operator); dispute evidence pack; operator approves the response (provide-evidence, else send-message; labelled replay in DEMO_MODE).
+
+**Build levels:** 1 local with PayPal mocked and labelled (done Nov 11); 2 live sandbox keys; 3 deployed on Render with a person paying as the sandbox buyer.
+
+**What the AI never does:** sign, buy insurance, refund, pay or file without a person; mark an invoice paid without PayPal's record or a verified manual record; claim cover without a policy; call a business fraudulent; invent verification results or deadlines; promise outcomes.
+
+**Cut for time:** Elastic, Bryntum, AG Studio assistant, Render Workflows, Payouts, Catalog Products, Zapier, Postman, Tier 3. AG Grid Community (free) carries the receivables ledger and audit trail. Kept: Gemini (the PDF's OpenAI or Claude suggestion is not free).
+
+**Stretch only if Level 3 is green by Nov 12, 11:00:** a command-center question box (Gemini picks a query, AG Grid shows it); PayPal Agent Toolkit calls for Payment AI.

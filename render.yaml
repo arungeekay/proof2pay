@@ -26,7 +26,11 @@ services:
       - key: GEMINI_API_KEY
         sync: false
       - key: GEMINI_MODEL
+        value: gemini-3.6-flash
+      - key: GEMINI_FALLBACK_MODEL
         value: gemini-3.8-flash
+      - key: PAYPAL_SANDBOX_BUYER_EMAIL
+        sync: false
       - key: PAYPAL_ENV
         value: sandbox
       - key: PAYPAL_CLIENT_ID

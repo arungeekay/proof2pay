@@ -19,6 +19,8 @@ const eslintConfig = [
       "build/**",
       "next-env.d.ts",
       "generated/**",
+      // Plain CommonJS dev helpers run with node -r / node directly.
+      "scripts/**/*.cjs",
     ],
   },
 ];

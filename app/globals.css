@@ -49,13 +49,13 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --background: oklch(0.985 0.003 250);
+  --foreground: oklch(0.18 0.01 260);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  --primary: oklch(0.42 0.13 258);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
@@ -131,3 +131,16 @@
     @apply font-sans;
   }
 }
+/* Rendered contracts and evidence packs */
+.md { line-height: 1.6; font-size: 0.9rem; }
+.md h1 { font-size: 1.25rem; font-weight: 600; margin: 0 0 0.75rem; }
+.md h2 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.4rem; }
+.md h3 { font-size: 0.95rem; font-weight: 600; margin: 1rem 0 0.3rem; }
+.md p { margin: 0.4rem 0; }
+.md ul, .md ol { margin: 0.4rem 0 0.4rem 1.25rem; }
+.md ul { list-style: disc; }
+.md ol { list-style: decimal; }
+.md blockquote { border-left: 3px solid var(--border); padding: 0.25rem 0.75rem; color: var(--muted-foreground); margin: 0.5rem 0; }
+.md table { border-collapse: collapse; margin: 0.5rem 0; font-size: 0.85rem; }
+.md th, .md td { border: 1px solid var(--border); padding: 0.3rem 0.6rem; text-align: left; }
+.md code { font-family: var(--font-mono); font-size: 0.8em; background: var(--muted); padding: 0 0.25rem; border-radius: 4px; word-break: break-all; }

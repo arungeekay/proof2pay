@@ -35,7 +35,7 @@ interface Cast {
   users: Record<UserKey, User>;
 }
 
-const BUYER_USER: Record<BuyerKey, UserKey> = { northwind: "buyer", harbourside: "harbourside", rhein: "rhein" };
+const BUYER_USER: Record<BuyerKey, UserKey> = { northwind: "buyer", harbourside: "harbourside", rhein: "rhein", kaveri: "kaveri" };
 
 const NOW = new Date();
 const TODAY = startOfUtcDay(NOW);
@@ -50,7 +50,9 @@ function at(date: Date, hours: number, minutes = 0): Date {
 const minutesAfter = (date: Date, minutes: number) => new Date(date.getTime() + minutes * 60_000);
 const isoDay = (date: Date) => date.toISOString().slice(0, 10);
 const round2 = (value: number) => Math.round(value * 100) / 100;
-const usd = (amount: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount);
+const money = (amount: number, currency = "USD") =>
+  new Intl.NumberFormat(currency === "INR" ? "en-IN" : "en-US", { style: "currency", currency }).format(amount);
+const usd = (amount: number) => money(amount);
 
 function party(business: Business) {
   return {
@@ -68,9 +70,10 @@ function buildClauses(
   insurance: ContractClauses["insurance"],
 ): ContractClauses {
   const msmed = h.preset === "IN_MSMED";
+  const currency = h.domestic ? "INR" : "USD";
   return ContractClausesSchema.parse({
     identities: { exporter: party(parties.exporter), carrier: party(parties.carrier), buyer: party(parties.buyer) },
-    cargo: { description: h.cargo, quantity: h.qty, unit: h.unit, declaredValue: h.value, currency: "USD" },
+    cargo: { description: h.cargo, quantity: h.qty, unit: h.unit, declaredValue: h.value, currency },
     liability: {
       goodsSafety: "Non-hazardous machined metal parts, packed to export standard with corrosion protection.",
       carrierLiabilityLimit: h.value,
@@ -86,16 +89,16 @@ function buildClauses(
       conditionStandard: `All ${h.qty} ${h.unit} delivered intact, dry and with seals unbroken.`,
     },
     payment: {
-      freight: {
-        amount: h.freight,
-        method: "PAYPAL_ORDER_AUTHORIZE_CAPTURE",
-        trigger: "Captured when delivery is verified; paid out to the carrier once the goods invoice is settled.",
-      },
-      goods: {
-        amount: h.value,
-        method: "PAYPAL_INVOICE",
-        trigger: "Invoiced to the buyer through PayPal when delivery is verified.",
-      },
+      freight: h.domestic
+        ? { amount: h.freight, method: "MANUAL_RECORD", trigger: "Paid to the carrier within 7 days of verified delivery." }
+        : {
+            amount: h.freight,
+            method: "PAYPAL_ORDER_AUTHORIZE_CAPTURE",
+            trigger: "Captured when delivery is verified; paid out to the carrier once the goods invoice is settled.",
+          },
+      goods: h.domestic
+        ? { amount: h.value, method: "MANUAL_RECORD", trigger: "Invoiced to the buyer when delivery is verified; payment by bank transfer." }
+        : { amount: h.value, method: "PAYPAL_INVOICE", trigger: "Invoiced to the buyer through PayPal when delivery is verified." },
     },
     credit: {
       days: h.creditDays,
@@ -109,7 +112,9 @@ function buildClauses(
     disputes: {
       objectionWindowDays: 7,
       evidenceRules: "Objections must cite the POD, delivery photos or the verification report.",
-      forum: "Disputes go first through Proof2Pay and PayPal dispute resolution.",
+      forum: h.domestic
+        ? "Disputes go first through Proof2Pay; unresolved delayed-payment claims may go to the MSE Facilitation Council (MSMED Act, 2006, section 18)."
+        : "Disputes go first through Proof2Pay and PayPal dispute resolution.",
     },
     signatures: { requiredParties: ["EXPORTER", "BUYER"] },
   });
@@ -136,6 +141,7 @@ function verificationReport(h: Historical, buyer: Business, deliveredAt: Date, v
 }
 
 function reminderCopy(stage: ReminderStage, reference: string, amount: string, due: string, msmed: boolean) {
+  // Copy is the same for PayPal and domestic invoices; only the channel differs.
   switch (stage) {
     case "T_MINUS_7":
       return { tone: "friendly", subject: `${reference}: invoice due ${due}`, body: `A reminder that the ${amount} invoice for ${reference} is due on ${due}.` };
@@ -154,6 +160,53 @@ function reminderCopy(stage: ReminderStage, reference: string, amount: string, d
         body: `The ${amount} invoice for ${reference} is 15 days past its due date of ${due}.${msmed ? " Statutory interest is accruing and the supplier may refer the matter to MSME Samadhaan." : ""}`,
       };
   }
+}
+
+/** Freight order, capture and PayPal tracker for a cross-border historical shipment. */
+async function createFreightRecords(
+  h: Historical,
+  shipmentId: string,
+  carrierName: string,
+  acceptedAt: Date,
+  verifiedAt: Date,
+  trackingNumber: string,
+) {
+  const order = await db.payPalOrder.create({
+    data: {
+      shipmentId,
+      paypalOrderId: `SEED-ORDER-${h.n}`,
+      intent: "AUTHORIZE",
+      purpose: "FREIGHT",
+      status: "COMPLETED",
+      amount: h.freight,
+      authorizationId: `SEED-AUTH-${h.n}`,
+      authorizationStatus: "CAPTURED",
+      authorizedAt: acceptedAt,
+      createdAt: acceptedAt,
+      captures: {
+        create: {
+          paypalCaptureId: `SEED-CAPTURE-${h.n}`,
+          status: "COMPLETED",
+          amount: h.freight,
+          capturedAt: verifiedAt,
+          createdAt: verifiedAt,
+        },
+      },
+    },
+    include: { captures: true },
+  });
+  const capture = order.captures[0];
+  await db.payPalTracking.create({
+    data: {
+      shipmentId,
+      captureId: capture.id,
+      transactionId: capture.paypalCaptureId,
+      trackingNumber,
+      carrierName,
+      status: "DELIVERED",
+      createdAt: verifiedAt,
+    },
+  });
 }
 
 async function createHistorical(h: Historical, { businesses, users }: Cast) {
@@ -198,6 +251,7 @@ async function createHistorical(h: Historical, { businesses, users }: Cast) {
       unit: h.unit,
       declaredValue: h.value,
       freightAmount: h.freight,
+      currency: h.domestic ? "INR" : "USD",
       originCity: "Chennai",
       originCountry: "IN",
       destinationCity: buyer.city ?? "",
@@ -265,42 +319,7 @@ async function createHistorical(h: Historical, { businesses, users }: Cast) {
       })
     : null;
 
-  const order = await db.payPalOrder.create({
-    data: {
-      shipmentId: shipment.id,
-      paypalOrderId: `SEED-ORDER-${h.n}`,
-      intent: "AUTHORIZE",
-      purpose: "FREIGHT",
-      status: "COMPLETED",
-      amount: h.freight,
-      authorizationId: `SEED-AUTH-${h.n}`,
-      authorizationStatus: "CAPTURED",
-      authorizedAt: acceptedAt,
-      createdAt: acceptedAt,
-      captures: {
-        create: {
-          paypalCaptureId: `SEED-CAPTURE-${h.n}`,
-          status: "COMPLETED",
-          amount: h.freight,
-          capturedAt: verifiedAt,
-          createdAt: verifiedAt,
-        },
-      },
-    },
-    include: { captures: true },
-  });
-  const capture = order.captures[0];
-  await db.payPalTracking.create({
-    data: {
-      shipmentId: shipment.id,
-      captureId: capture.id,
-      transactionId: capture.paypalCaptureId,
-      trackingNumber,
-      carrierName: carrier.name,
-      status: "DELIVERED",
-      createdAt: verifiedAt,
-    },
-  });
+  if (!h.domestic) await createFreightRecords(h, shipment.id, carrier.name, acceptedAt, verifiedAt, trackingNumber);
 
   // Reminders were sent at 09:00 UTC on each stage date until the invoice was paid (or until now).
   const settledOrNow = paidAt ?? NOW;
@@ -310,8 +329,8 @@ async function createHistorical(h: Historical, { businesses, users }: Cast) {
     .filter(({ sentAt }) => sentAt < settledOrNow)
     .map(({ stage, sentAt }) => ({
       stage,
-      ...reminderCopy(stage, reference, usd(h.value), isoDay(clock.dueDate), msmed),
-      channel: "PAYPAL_INVOICE_REMINDER",
+      ...reminderCopy(stage, reference, money(h.value, h.domestic ? "INR" : "USD"), isoDay(clock.dueDate), msmed),
+      channel: h.domestic ? "EMAIL_STUB" : "PAYPAL_INVOICE_REMINDER",
       sentAt,
       createdAt: sentAt,
     }));
@@ -320,12 +339,14 @@ async function createHistorical(h: Historical, { businesses, users }: Cast) {
   const invoice = await db.payPalInvoice.create({
     data: {
       shipmentId: shipment.id,
-      paypalInvoiceId: `SEED-INV-${h.n}`,
-      invoiceNumber: `SEED-${reference}-G`,
+      paypalInvoiceId: h.domestic ? `MANUAL-INV-${h.n}` : `SEED-INV-${h.n}`,
+      invoiceNumber: h.domestic ? `MPE/26-27/${h.n}` : `SEED-${reference}-G`,
       purpose: "GOODS",
+      channel: h.domestic ? "MANUAL_RECORD" : "PAYPAL",
+      currency: h.domestic ? "INR" : "USD",
       status: refunded ? "PARTIALLY_REFUNDED" : paidAt ? "PAID" : "SENT",
       amount: h.value,
-      recipientEmail: buyer.paypalEmail ?? "",
+      recipientEmail: buyer.paypalEmail ?? `accounts@${buyer.name.split(" ")[0].toLowerCase()}.example`,
       sentAt: verifiedAt,
       dueDate: clock.dueDate,
       paidAt,
@@ -350,7 +371,7 @@ async function createHistorical(h: Historical, { businesses, users }: Cast) {
     },
   });
 
-  if (paidAt) {
+  if (paidAt && !h.domestic) {
     const proposedAt = minutesAfter(paidAt, 5);
     const approvedAt = minutesAfter(paidAt, 95);
     const approval = await db.approvalRequest.create({

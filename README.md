@@ -1,6 +1,14 @@
 # Proof2Pay
 
-**The trust and settlement layer for cross-border B2B trade.** Every shipment starts with an AI-drafted contract, is verified at delivery by AI, settles through PayPal, and leaves both parties with a verified track record.
+**Every shipment. Every promise. Every payment. Verified.** Proof2Pay gives B2B logistics a verifiable agreement, a documented delivery, a measurable payment obligation and an auditable outcome. AI agents recommend; people approve; PayPal settles.
+
+## Three scenarios
+
+1. **Successful shipment (SH-1042):** Contract AI drafts and flags the contract, both parties accept the same hash, Delivery AI reads the POD with Gemini vision, the operator approves a PayPal invoice, the buyer pays in the PayPal sandbox, the verified webhook confirms it, and tracking is attached to the PayPal transaction.
+2. **Delayed payment (SH-1039):** an Indian domestic invoice past its MSMED due date. The credit clock computes statutory interest, Payment AI drafts the final notice and assembles an MSME evidence package. PayPal does not settle Indian domestic payments, so payment is a manually verified record.
+3. **Damage and dispute (SH-1042):** the buyer reports a dented carton; Resolution AI weighs the contract, the POD and the cover, recommends a partial refund; the operator approves the PayPal refund, a simulated insurance claim and the dispute response.
+
+Anything not real is labelled in the UI: PayPal mocked (no sandbox keys), simulated insurer, replayed dispute, sample AI output (Gemini unavailable).
 
 > Work in progress for the PayPal AI Hackathon (submission deadline November 12, 2026). The full README, with screenshots, the PayPal API map and sponsor sections, lands before submission. The build plan is in [PROOF2PAY_BUILD_PLAN.md](PROOF2PAY_BUILD_PLAN.md) and status is in [PROGRESS.md](PROGRESS.md).
 
@@ -16,6 +24,12 @@ npm run db:deploy          # apply migrations
 npm run db:seed            # wipe and load demo data (requires DEMO_MODE=true)
 npm run dev                # http://localhost:3000
 ```
+
+Without PayPal keys the app runs with PayPal mocked (every mocked record is labelled). With sandbox keys in `.env`, `npm run paypal:setup` checks them and, given the public URL, registers the webhook: `npm run paypal:setup -- https://your-app.onrender.com`.
+
+`npm run e2e -- pod.png [photo.png]` drives all three scenarios through the agents without a browser (it changes the demo data; reseed afterwards).
+
+If your router refuses DNS for `*.neon.tech`, prefix local commands with `NODE_OPTIONS="--require=./scripts/public-dns.cjs"`.
 
 `GET /api/health` returns `{"status":"ok"}` when the app can reach the database. `GET /api/ping` checks only that the app is up.
 

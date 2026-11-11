@@ -2,53 +2,65 @@
 
 Updated at the end of every session (plan Section 0). Current status first, then the session log, newest first.
 
-## Current status (2026-11-02, Day 3 of "Foundation", Oct 31 to Nov 2)
+## Current status (2026-11-11, 23:00 IST; submission target Nov 12, 18:00 IST)
 
-### Waiting on Arun
+The plan changed on Nov 11 to the v2 scope in `PROOF2PAY_BUILD_PLAN.md` Section 17 (three demo scenarios, three build levels).
+**Level 1 is done:** all three scenarios run end to end with live Gemini and mocked PayPal (`npm run e2e`, log in the session entry below).
 
-All free, and none needs a payment card (plan rule 11).
+### Waiting on Arun (in this order)
 
-- [ ] **GitHub:** run `gh repo create arungeekay/proof2pay --public --source . --remote origin --push` from this folder. Claude Code's auto mode won't create public repos.
-- [x] **Gemini API key:** in local `.env` and tested 2026-11-02. `gemini-3.8-flash` and `gemini-3.6-flash` both answer. Paste the same key into Render when the Blueprint prompts for it.
-- [ ] **PayPal sandbox:** create three US accounts (exporter business, carrier business, buyer personal) and one app, and turn on the app's Payouts, Invoicing and Disputes features. Client id and secret go in `.env`. Account logins go in `docs/judge-credentials.md`, which is gitignored.
-- [x] **Neon:** project `patient-math-88954862` (AWS Singapore, branch `production`), linked with `neon init`. Migrated and seeded 2026-11-02 (21 shipments).
-- [ ] **Render:** deploy the Blueprint (README button), then send Claude the URL. When prompted, paste `DATABASE_URL` (Neon pooled), `DATABASE_URL_UNPOOLED` (Neon direct) and the keys. `neon env pull` prints both Neon strings. Optionally claim the hackathon credits, but never add a card.
-- [ ] **APIMatic:** reload the window, approve the `context-matic` MCP server from `.mcp.json`, then authenticate it in `/mcp` with a free APIMatic account. Also fill in the Devpost APIMatic form.
-- [ ] **AG Studio:** request the 45-day trial today; started Nov 2, it lasts to Dec 17. The licence key goes in `.env` as `AG_STUDIO_LICENSE_KEY`.
-- [ ] **Elastic (Nov 3, not before):** start the trial via https://ela.st/elastic-paypal-hackathon. `ELASTIC_URL` and `ELASTIC_API_KEY` go in `.env`. Extend it around Nov 15 at https://www.elastic.co/trialextension.
+- [ ] **PayPal sandbox (tonight):** developer.paypal.com > Apps & Credentials > Sandbox > Create App. Put the client id and secret in `.env` as `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET`. Put the sandbox **Personal** account email in `PAYPAL_SANDBOX_BUYER_EMAIL` (invoices go there). Logins go in `docs/judge-credentials.md`.
+- [ ] **Push:** `git push` (commits are local).
+- [ ] **Render:** deploy the Blueprint (README button). Paste both Neon URLs, the Gemini key, the PayPal keys and `PAYPAL_SANDBOX_BUYER_EMAIL`. Send Claude the URL.
+- [ ] **Pay as the buyer:** on the hosted app, open the SH-1042 invoice link and pay with the sandbox Personal account.
+- [ ] **Video and Devpost** (14:00 to 18:00 on Nov 12).
+- [ ] Optional: Windows DNS to 1.1.1.1 (see "Local DNS" below).
 
 ### Claude does once those land
 
-- Register the PayPal webhook through the REST API (no dashboard step), store `PAYPAL_WEBHOOK_ID`, and set it on Render.
-- Set the GitHub repository variable `APP_URL` so the keep-alive ping starts, then check `/api/health` on the hosted URL.
+- `npm run paypal:setup` (checks keys), then `npm run paypal:setup -- https://<render-url>` to register the webhook; set `PAYPAL_WEBHOOK_ID` locally and on Render.
+- Run scenario 1 and 3 against the real sandbox; check whether provide-evidence works on a sandbox dispute (falls back to send-message, else the labelled replay).
+- Set the GitHub variable `APP_URL` for the keep-alive. README final, `docs/demo-script.md`, `docs/devpost-submission.md`.
+
+### Local DNS (found 2026-11-11)
+
+The JioFiber router refuses DNS queries for `*.neon.tech` ("Query refused"); public resolvers answer. Workaround for local runs only:
+`NODE_OPTIONS="--require=./scripts/public-dns.cjs"` before `npx next dev`, `npx tsx prisma/seed.ts` and `npm run e2e`.
+Prisma Migrate's native engine ignores it, so `scripts/apply-migration-pg.cjs` applies migrations over `pg` and records them exactly like `prisma migrate deploy`.
+Render is not affected. Changing Windows DNS to 1.1.1.1 removes the need for both.
 
 ### Decisions (Arun delegated all decisions on 2026-11-02, provided they cost nothing)
 
 | Topic | Decision | Why |
 |---|---|---|
-| LLM | Google Gemini free tier, `gemini-3.8-flash` (stable, vision, tool use), behind `lib/llm.ts` | Anthropic has no free API tier. Free-tier prompts may be used by Google, which is fine because all demo data is fictional. |
-| Quota safety | `lib/llm.ts` retries with backoff on 503 and 429, then falls back to `gemini-3.6-flash`. As a last resort, `DEMO_MODE` replays recorded output for the scripted SH-1042 flow and labels it as replayed | `gemini-3.8-flash` returned 503 "high demand" on the first test on 2026-11-02, then recovered. Judging runs to Dec 15 on a free quota. |
-| Database | Neon free Postgres (0.5 GB, scales to zero, no expiry, no card). The app uses the pooled `DATABASE_URL` through Prisma's `pg` adapter. Prisma Migrate uses `DATABASE_URL_UNPOOLED`, falling back to `DATABASE_URL` for local Docker. | Render's free Postgres expires after 30 days, and paid Render needs a card. Neon's skill: `node-postgres` suits a long-running server, and migrations must not run through PgBouncer. |
-| Hosting | Render free web service via `render.yaml`. The build runs migrations and seeds only an empty database. Keep-alive GitHub Action pings `/api/ping` every 10 minutes | Avoids the cold start of about a minute for judges. One service uses about 744 of 750 free hours a month. |
-| APIMatic | ContextMatic MCP server declared in project `.mcp.json` (OAuth login, free) | Installing the plugin from the CLI was blocked by auto mode, and this is the same server |
-| Credit clock start | Day of acceptance of goods, which is the verified delivery date. The invoice is sent the same day, due acceptance + credit days | MSMED s.15 counts from acceptance; the seed already does this |
-| Demo time compression | Generate the SH-1042 demo POD at seed time, dated inside the delivery window | Delivery AI should verify it cleanly apart from the scripted dented carton |
-| RBI bank rate | 5.75% (rbi.org.in, checked 2026-11-02; repo raised to 5.50% on Oct 7). Next MPC Dec 2 to 4: re-check before recording | MSMED interest is 3x the bank rate |
-| Sandbox account country | United States for all three accounts, currency USD | Indian PayPal accounts can't send payouts and have domestic restrictions. The story stays "exporter in Chennai", and the README will say so. |
-| Exporter name | Keep the fictional "Marina Precision Exports Pvt Ltd" | A fictional name avoids implying a real company |
-| MSMED pitch | Claim documentation value, not enforcement, against overseas buyers | Recovery through MSME Samadhaan is hard against a foreign buyer |
-| Packages | Approved, each installed on its plan day: PayPal Agent Toolkit plus MCP client, `@paypal/paypal-server-sdk` (if the toolkit lacks a call), Gemini SDK, `@elastic/elasticsearch`, Bryntum trial, AG Studio, Render Workflows SDK | All free or trial |
-| npm audit | Leave the 8 build-time findings; the fix needs Next 16 | Not in the plan |
-
-Checked 2026-11-02: MSMED s.15 caps a written period at 45 days from acceptance and sets 15 days when nothing is agreed. s.16 is compound interest with monthly rests at 3x the RBI bank rate. This matches `lib/credit-clock/presets.ts`.
-
-### Next three tasks (once the PayPal keys land)
-
-1. `lib/paypal` REST client with APIMatic ContextMatic: OAuth token cache, Orders authorize and capture, Invoicing create/send/get, Payouts, Refunds, webhook verification, and webhook registration.
-2. PayPal MCP client and a test route making one tool call.
-3. Hosted check: Render deploy green, `/api/health` live, keep-alive running.
+| Plan v2 (Nov 11) | Adopt the PDF's three scenarios, three build levels, domestic manual records and "what the AI never does". Keep Gemini (the PDF suggested OpenAI or Claude: not free). Cut Elastic, Bryntum, AG Studio assistant, Render Workflows, Payouts and Catalog | 20 hours left and no keys for those; AG Grid Community (free, MIT) carries the receivables ledger and audit trail |
+| Freight | Billed to the buyer as a line on the PayPal goods invoice (`PAYPAL_INVOICE_LINE`); no separate freight order or carrier payout | One PayPal flow the buyer can pay in sandbox; payouts cut |
+| Paid status | Only from PayPal (verified webhook, then a re-read of the invoice, or the Sync button) or, for domestic trade, an operator's manually verified record with a bank reference | "Never mark paid without verified payment evidence" |
+| Tracking | Added to the PayPal transaction once the invoice is paid (Add Tracking needs a transaction id) | Strengthens the seller in a dispute |
+| Refunds | Payments v2 refund on the invoice's payment transaction, after operator approval; then a simulated insurance claim, also approved | |
+| Disputes | Sync from PayPal (or webhook); Resolution AI builds the evidence pack; on approval, provide-evidence, falling back to send-message. DEMO_MODE has a labelled replay | Sandbox dispute creation is unreliable |
+| Scenario 2 data | SH-1039 is now a domestic INR sale to Kaveri Auto Components (Coimbatore), 28 days overdue, MSMED interest accruing | MSMED rules concern Indian buyers |
+| Gemini model | `gemini-3.6-flash` primary, `gemini-3.8-flash` fallback; a model that hangs or fails is skipped for 5 minutes; labelled sample output as the last resort | 3.8 hung for 60s+ on Nov 11 while 3.6 answered in 3s |
+| Uploads | POD and photos stored in Postgres as data URLs, served by `/api/evidence/[id]` | Render's free disk is ephemeral |
+| Demo POD | Generated in the browser (canvas, dated today, captioned "generated") or any real upload | Works on any judging day |
+| LLM | Google Gemini free tier behind `lib/llm.ts` | Anthropic has no free API tier |
+| Database | Neon free Postgres; app uses the pooled URL, Prisma Migrate the direct one | Render's free Postgres expires after 30 days |
+| Hosting | Render free web service via `render.yaml`; keep-alive pings `/api/ping` every 10 minutes | |
+| RBI bank rate | 5.75% (checked 2026-11-02). Next MPC Dec 2 to 4 | MSMED interest is 3x the bank rate |
+| Sandbox account country | United States | Indian PayPal accounts can't send payouts and have domestic restrictions |
 
 ## Session log
+
+### 2026-11-11
+
+- Reviewed `Proof2pay.pdf` (the Nov 10 plan) against the build plan; merged into plan Section 17.
+- Built Level 1 (mocked PayPal, live Gemini):
+  - Schema: migration `20261111170000_v2_scope` (`PaymentChannel`, `payerViewUrl`, approval types `INVOICE_SEND` and `INSURANCE_CLAIM`, reminder stage `FINAL_NOTICE`, decision `INVESTIGATE`).
+  - `lib/llm.ts` (Gemini REST, zod-validated JSON, retry, fallback, labelled sample output), `lib/paypal` (OAuth, Invoicing, refunds, Add Tracking, Disputes, webhook verify and register, mock mode), `lib/agents` (contract, delivery, payment, resolution, trust, execute, audit), `lib/insurer-sim`, `lib/trust-score`, `lib/approvals.ts`, `lib/session.ts`.
+  - Pages: overview with the three scenarios, shipments, shipment detail (contract, delivery, payment, resolution, audit), approvals, receivables (AG Grid), trust profiles, audit trail (AG Grid), evidence packs. PayPal webhook route.
+  - Seed: Kaveri Auto Components (IN) and SH-1039 as the domestic overdue sale.
+- Verified: lint, typecheck, 39 tests, `next build`. `npm run e2e` against Neon ran all three scenarios: MSMED rule blocked Net 60; both parties accepted Net 30; Gemini vision read the POD and found the dented carton; invoice approved and sent (mocked); payment; Resolution AI recommended $300 of the $400 asked; refund, simulated insurance claim and dispute evidence approved; domestic final notice and MSME package (Rs 5,425.48 interest at 17.25%). 30 audit events. Every page returned 200. Two Gemini calls hit 503 and used labelled sample output.
+- Neon reseeded clean afterwards.
 
 ### 2026-11-02
 

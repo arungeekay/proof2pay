@@ -42,6 +42,15 @@ export const BUSINESSES = {
     paypalEmail: "accounts@harbourside-trading.example",
     verified: true,
   },
+  kaveri: {
+    name: "Kaveri Auto Components Pvt Ltd",
+    isBuyer: true,
+    country: "IN",
+    city: "Coimbatore",
+    paypalEmail: null,
+    gstin: "33AABCK0000A1Z5",
+    verified: false,
+  },
   rhein: {
     name: "Rhein Industrial Supply GmbH",
     isBuyer: true,
@@ -53,7 +62,7 @@ export const BUSINESSES = {
 } as const;
 
 export type BusinessKey = keyof typeof BUSINESSES;
-export type BuyerKey = "northwind" | "harbourside" | "rhein";
+export type BuyerKey = "northwind" | "harbourside" | "rhein" | "kaveri";
 export type CarrierKey = "exampleFreight" | "bluewater";
 
 /** The four role-switcher personas come first; the rest sign historical contracts. */
@@ -64,11 +73,12 @@ export const USERS = {
   manager: { name: "Kavitha Subramanian", email: "kavitha@marina-exports.example", role: "MANAGER", business: "exporter" },
   harbourside: { name: "Tom Hughes", email: "tom@harbourside-trading.example", role: "BUYER", business: "harbourside" },
   rhein: { name: "Katrin Weber", email: "katrin@rhein-industrial.example", role: "BUYER", business: "rhein" },
+  kaveri: { name: "Meena Raghavan", email: "meena@kaveri-auto.example", role: "BUYER", business: "kaveri" },
   bluewater: { name: "Wei Ling Tan", email: "weiling@bluewater-cargo.example", role: "CARRIER", business: "bluewater" },
 } as const;
 
-/** Sea transit from Chennai, in days, by destination country. */
-export const TRANSIT_DAYS: Record<string, number> = { US: 38, GB: 28, DE: 30 };
+/** Transit from Chennai, in days, by destination country: sea freight abroad, road within India. */
+export const TRANSIT_DAYS: Record<string, number> = { US: 38, GB: 28, DE: 30, IN: 2 };
 
 export const TRACKING_PREFIX: Record<CarrierKey, string> = { exampleFreight: "EFL", bluewater: "BCL" };
 
@@ -103,12 +113,15 @@ export interface Historical {
   /** Days after the due date the goods invoice was paid; negative is early, null is still unpaid. */
   paidDaysAfterDue: number | null;
   insured?: boolean;
+  /** Indian domestic trade: amounts in INR, no PayPal (PayPal India handles cross-border only). Payment is a manual record. */
+  domestic?: true;
   discrepancy?: Discrepancy;
   dispute?: HistoricalDispute;
 }
 
 // 20 shipments before SH-1042. Mix: 17 settled (3 late, 2 disputed), 1 overdue, 1 running, plus one
 // minor POD discrepancy, so trust profiles span low and medium confidence.
+// SH-1039 is the delayed-payment scenario: an Indian domestic sale (INR), unpaid and past its MSMED due date.
 export const HISTORY: Historical[] = [
   { n: 1022, buyer: "northwind", carrier: "exampleFreight", cargo: "flanged couplings", qty: 30, unit: "cartons", value: 9400, freight: 720, deliveredDaysAgo: 175, creditDays: 30, preset: "IN_MSMED", paidDaysAfterDue: -2 },
   { n: 1023, buyer: "northwind", carrier: "exampleFreight", cargo: "hydraulic fittings", qty: 25, unit: "cartons", value: 7800, freight: 640, deliveredDaysAgo: 168, creditDays: 30, preset: "IN_MSMED", paidDaysAfterDue: 0 },
@@ -161,7 +174,7 @@ export const HISTORY: Historical[] = [
   { n: 1036, buyer: "harbourside", carrier: "exampleFreight", cargo: "hydraulic manifolds", qty: 12, unit: "crates", value: 10900, freight: 990, deliveredDaysAgo: 78, creditDays: 30, preset: "IN_MSMED", paidDaysAfterDue: 0, insured: true },
   { n: 1037, buyer: "northwind", carrier: "exampleFreight", cargo: "CNC-turned spindles", qty: 16, unit: "crates", value: 13300, freight: 980, deliveredDaysAgo: 70, creditDays: 30, preset: "IN_MSMED", paidDaysAfterDue: -2, insured: true },
   { n: 1038, buyer: "rhein", carrier: "exampleFreight", cargo: "machined plates", qty: 18, unit: "crates", value: 8100, freight: 1010, deliveredDaysAgo: 64, creditDays: 60, preset: "GENERIC", paidDaysAfterDue: 0 },
-  { n: 1039, buyer: "harbourside", carrier: "bluewater", cargo: "spacer rings", qty: 30, unit: "cartons", value: 4900, freight: 700, deliveredDaysAgo: 58, creditDays: 30, preset: "IN_MSMED", paidDaysAfterDue: null },
+  { n: 1039, buyer: "kaveri", carrier: "exampleFreight", cargo: "spacer rings", qty: 30, unit: "cartons", value: 410000, freight: 18000, deliveredDaysAgo: 58, creditDays: 30, preset: "IN_MSMED", paidDaysAfterDue: null, domestic: true },
   { n: 1040, buyer: "northwind", carrier: "exampleFreight", cargo: "coupling sleeves", qty: 32, unit: "cartons", value: 8450, freight: 690, deliveredDaysAgo: 46, creditDays: 30, preset: "IN_MSMED", paidDaysAfterDue: -1 },
   { n: 1041, buyer: "northwind", carrier: "exampleFreight", cargo: "machined end caps", qty: 26, unit: "cartons", value: 7200, freight: 610, deliveredDaysAgo: 22, creditDays: 30, preset: "IN_MSMED", paidDaysAfterDue: null },
 ];
