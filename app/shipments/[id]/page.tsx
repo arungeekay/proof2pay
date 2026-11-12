@@ -111,6 +111,14 @@ function guide(s: Shipment, user: SessionUser, personas: Persona[]): Guide {
       : { text: `The AI has prepared an action: ${pending[0].summary}. Nothing happens until the finance manager approves it.`, tab, switchTo: manager };
   }
 
+  const failed = s.approvalRequests.find((a) => a.status === "FAILED");
+  if (failed) {
+    const tab: TabId = failed.actionType === "INVOICE_SEND" ? "payment" : "resolution";
+    return operator
+      ? { text: `An approved action did not go through: ${failed.summary}. The reason is shown in red below. Click Retry to try again.`, tab }
+      : { text: `An approved action did not go through: ${failed.summary}. The finance manager can retry it.`, tab, switchTo: manager };
+  }
+
   switch (s.status) {
     case "DRAFT":
       return operator
