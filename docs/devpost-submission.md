@@ -9,7 +9,7 @@ Proof2Pay
 Every shipment, every promise, every payment, verified: AI agents that recommend, people who approve, and PayPal that settles.
 
 ## Links
-- Hosted demo: `<https://proof2pay.onrender.com>`
+- Hosted demo: https://proof2pay-3frl.onrender.com
 - Source: https://github.com/arungeekay/proof2pay (MIT)
 - Video: `<YouTube link>`
 

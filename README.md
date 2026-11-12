@@ -6,7 +6,7 @@ Proof2Pay is a contract, delivery, payment and trust platform for B2B logistics.
 
 Built for the PayPal AI Hackathon 2026. MIT licensed.
 
-- **Live demo:** `<Render URL>` (pick a persona on the home page; no login)
+- **Live demo:** https://proof2pay-3frl.onrender.com (pick a story on the home page; no login)
 - **Video:** `<YouTube link>`
 
 ![Home](docs/screenshots/home.png)
