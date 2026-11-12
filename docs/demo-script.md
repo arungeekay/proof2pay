@@ -1,24 +1,29 @@
-# Proof2Pay demo script (video under 3:00, aim for 2:50)
+# Proof2Pay demo video script
 
-Record the hosted app in a browser at 1080p. Voiceover; no music, or royalty-free only; no third-party logos. Before recording, reseed so SH-1042 starts as a draft (`npm run db:seed`, which wipes the demo). Keep the PayPal sandbox buyer logged in in a second browser profile.
+**Proof2Pay** · PayPal AI Hackathon 2026 · Team Proof2Pay: Arun ([arungeekay](https://github.com/arungeekay)), Ajai Kumar M ([Ajai-K](https://github.com/Ajai-K))
 
-Say these words on camera where they appear: **PayPal**, **agent**, **Gemini**, **AG Grid**, **Render**, **APIMatic** (only if it was actually used).
+Running time **2:54** (limit 3:00). Recorded on the hosted app in a browser, with real PayPal sandbox calls (invoice, card payment, refund). Voiceover in Indian English (en-IN), generated with Google Gemini text-to-speech. Each scene carries an on-screen banner: the feature name and what it does.
 
-| Time | On screen | Voiceover |
+| Time | Scene and banner | Voiceover |
 |---|---|---|
-| 0:00–0:20 | Home page: tagline, three scenario cards | "Small exporters and logistics firms ship thousands of dollars of goods on an email thread. Payment runs late, delivery is hard to prove, and nobody knows who pays on time. Proof2Pay makes every shipment, promise and payment verifiable, with PayPal settling the money." |
-| 0:20–0:45 | SH-1042 as Rahul (exporter): Draft contract. Change credit to 60 days: the MSMED rule blocks it. Back to 30 | "Contract AI fills a fixed, human-written clause library from the shipment, flags issues and explains them. Under India's MSMED Act, 60-day credit is illegal for a small supplier, so the rule blocks it. The AI never invents legal terms." |
-| 0:45–0:55 | Accept as exporter; switch to Laura (buyer), accept | "Both parties accept the same SHA-256 hash. The AI never signs." |
-| 0:55–1:20 | Switch to Dinesh (carrier): Confirm pickup. Generate demo POD, upload. Verification report with "1 carton dented" | "At delivery, Delivery AI reads the signed proof of delivery and photos with Gemini vision and checks them against the contract. It finds one dented carton and records it." |
-| 1:20–1:45 | Switch to Kavitha (finance manager): approval card, Approve. Payment tab: PayPal invoice, credit clock running | "Payment AI proposes the PayPal invoice, due 30 days from acceptance. Nothing goes to PayPal until a person approves." |
-| 1:45–2:00 | Second browser: buyer opens the PayPal invoice link and pays in sandbox. Back in the app: paid, tracking added | "The buyer pays through PayPal. Only PayPal's verified webhook marks it paid, and Proof2Pay attaches the delivery tracking to the PayPal transaction." |
-| 2:00–2:25 | Laura: Resolution tab, request $400. Recommendation: partial $300 with cited evidence. Kavitha approves: PayPal refund, simulated insurance claim | "The buyer asks for $400. Resolution AI compares the claim with the contract and the POD: one carton was recorded damaged, worth $300 at contract value. The manager approves; the PayPal refund runs, and the loss is claimed from the insurer, simulated in this demo." |
-| 2:25–2:40 | SH-1039: 28 days overdue, ₹5,425 interest, Draft final notice, MSME package | "Delayed payment: an Indian domestic sale. PayPal doesn't settle domestic Indian payments, so the payment is a manually verified record, but the credit clock, statutory interest and the MSME evidence package all work." |
-| 2:40–2:50 | Command center: "Show disputed shipments over $10,000 with insurance attached". Then the trust profile | "Managers ask in plain language; AG Grid shows the answer. Trust profiles change only on verified events." |
-| 2:50–3:00 | Audit trail | "Every agent decision explained, every action approved by a person, every dollar through PayPal. Today Proof2Pay settles cross-border trade through PayPal; when PayPal can settle India's domestic B2B payments, the trust record is already there." |
+| 0:00 | **Proof2Pay** | Proof2Pay. Every shipment, every promise, every payment, verified. Built for the PayPal AI Hackathon. |
+| 0:08 | **The problem we solve**<br>Late payments, weak delivery proof, manual disputes. Proof2Pay: AI recommends, people approve, PayPal settles. | Indian exporters and logistics firms ship goods worth lakhs on an email thread. Payments run late, delivery is hard to prove, and disputes are fought with scattered paperwork. Proof2Pay fixes this with AI agents that recommend, people who approve, and PayPal that settles the money. |
+| 0:25 | **Contract AI**<br>Fixed clause library  ·  MSMED Act s.15 rule blocks 60-day credit  ·  plain-language explanation of every clause | Rahul, the exporter, asks Contract AI to draft the contract from a fixed clause library. When he tries sixty days of credit, the MSMED Act rule blocks it. At thirty days the contract passes, and the AI explains every clause in plain language. |
+| 0:43 | **Two-party acceptance**<br>Exporter and buyer accept the same SHA-256 hash  ·  simulated cargo insurance is bound on acceptance | The buyer accepts the same hashed contract. Once both parties accept, the simulated cargo insurance quote is bound to the shipment. The AI never signs anything. |
+| 0:53 | **Delivery AI**<br>Gemini vision reads the POD and photos  ·  rule-based match against the contract  ·  1 dented carton flagged | At delivery, the carrier uploads the signed proof of delivery and photos. Delivery AI reads them with Gemini vision, checks them against the contract, and records one dented carton. |
+| 1:05 | **Human approval before PayPal**<br>Payment AI proposes the invoice, due 30 days from acceptance  ·  nothing reaches PayPal until a person approves | Payment AI proposes the invoice, due thirty days after acceptance. Nothing goes to PayPal until the finance manager approves it. |
+| 1:15 | **PayPal Invoicing + Shipment Tracking**<br>Buyer pays on PayPal's own checkout (sandbox)  ·  paid only on PayPal's record  ·  tracking added to the transaction | The buyer opens PayPal's own invoice page and pays by card in the sandbox. Proof2Pay never marks an invoice paid on its own word. It confirms the payment with PayPal, then attaches the tracking number to the PayPal transaction, to protect the seller. |
+| 1:31 | **Resolution AI + PayPal refund**<br>Recommends $300 of the $400 asked, citing the evidence  ·  PayPal Payments refund  ·  simulated insurance claim | The buyer asks for four hundred dollars for the dented carton. Resolution AI weighs the contract and the delivery evidence, and recommends three hundred, the carton's contract value. The manager approves, and PayPal executes the refund. |
+| 1:46 | **PayPal dispute response**<br>AI case file: timeline, contradictions, missing evidence  ·  operator approves  ·  replayed dispute is labelled | If the buyer escalates to a PayPal dispute, Resolution AI builds the case file: a timeline, contradictions, missing evidence, and a response that cites every record. A person approves before anything is sent to PayPal. |
+| 1:59 | **Delayed payment, Indian domestic trade**<br>Credit clock + MSMED s.16 interest  ·  AI final notice  ·  MSME evidence package (not a government filing) | Next, a domestic Indian sale that is twenty eight days overdue. The credit clock calculates statutory interest, and Payment AI drafts a final notice and an MSME evidence package, clearly marked as not a government filing. |
+| 2:15 | **Receivables ledger + PayPal view**<br>AG Grid ledger of every invoice and credit clock  ·  one view of all PayPal invoices, payments and refunds | Finance sees every receivable in an AG Grid ledger, with live credit clocks and statutory interest, and one view of every PayPal invoice, payment and refund. |
+| 2:27 | **Command center + trust profiles**<br>Plain-English question → read-only query → AG Grid answer  ·  trust built only from verified events | Managers ask questions in plain English. Gemini turns each question into a safe, read only query, and AG Grid shows the answer. Trust profiles change only on verified events, with a confidence band, and never label anyone a defaulter. |
+| 2:42 | **Full audit trail**<br>Every AI decision, human approval and PayPal event, with its reasoning, model and evidence | Every agent decision is explained and audited, every action is approved by a person, and every dollar moves through PayPal. Proof2Pay. Verified trade, for India and the world. |
 
-## Fallbacks while recording
+## Before re-recording
 
-- **Gemini busy:** the app tries the next free model. If every model fails, it shows labelled sample output. Pause and retry rather than record a "sample" badge.
-- **Sandbox dispute won't open:** as Laura, use "Open a dispute (replay, labelled)". The video must show the "replayed dispute" label.
-- **Webhook slow:** use "Sync from PayPal" on the Payment tab. It reads the invoice from PayPal, which is the same evidence.
+- Press **Reset demo data** on the home page so SH-1042 starts as a draft.
+- Pay the invoice on PayPal's page with **Debit or Credit Card**: test card `4012 8888 8888 1881`, expiry 12/30, CVV 123, any US address. Then press **Sync from PayPal** (sandbox webhooks are unreliable).
+- Use **Open a dispute (replay, labelled)** for the dispute scene and keep the label visible.
+- If a purple "sample AI output" label appears, Gemini's free tier was busy: wait a minute and redo the shot.
+- Keep everyone else off the hosted app while recording, and don't push code (a push redeploys Render).
