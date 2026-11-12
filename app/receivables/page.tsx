@@ -40,10 +40,10 @@ export default async function ReceivablesPage() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Receivables and credit clocks</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Money owed (receivables)</h1>
         <p className="text-muted-foreground text-sm">
-          Each invoice&apos;s clock starts on acceptance of goods. Under the MSMED preset, interest after the statutory due date is compound, with monthly rests,
-          at three times the RBI bank rate ({process.env.RBI_BANK_RATE_PCT ?? "5.75"}%). Overdue is a status, not a judgement.
+          Every invoice, who owes it, and how many days are left to pay. The count starts when the goods are accepted. Under India&apos;s MSME late-payment law (MSMED
+          Act), a late invoice earns compound interest at three times the RBI bank rate ({process.env.RBI_BANK_RATE_PCT ?? "5.75"}%). Overdue is a status, not a judgement.
         </p>
       </div>
       <ReceivablesGrid rows={rows} />

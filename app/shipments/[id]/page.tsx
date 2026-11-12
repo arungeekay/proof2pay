@@ -1,4 +1,4 @@
-import { Check } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
@@ -14,6 +14,7 @@ import {
   sendReminderAction,
   simulateDisputeAction,
   simulatePaymentAction,
+  switchPersona,
   syncDisputesAction,
   syncInvoiceAction,
   uploadPodAction,
@@ -24,20 +25,21 @@ import { AuditList } from "@/components/audit-list";
 import { SourceTag } from "@/components/source-tag";
 import { Markdown } from "@/components/markdown";
 import { PodUpload } from "@/components/pod-upload";
+import { ShipmentWorkspace } from "@/components/shipment-workspace";
 import { SimTag, StatusBadge, Tag } from "@/components/status";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import type { ContractReview } from "@/lib/agents/contract";
 import type { Discrepancy } from "@/lib/agents/delivery-match";
 import { computeInterest, daysBetween } from "@/lib/credit-clock";
 import { db } from "@/lib/db";
-import { dateTime, day, humanize, isoDay, money, num } from "@/lib/format";
+import { dateTime, day, humanize, isoDay, money, num, ROLE_LABEL } from "@/lib/format";
 import { isMockId, paypalConfigured } from "@/lib/paypal/client";
-import { canApprove, currentUser, type SessionUser } from "@/lib/session";
+import { canApprove, currentUser, listPersonas, type SessionUser } from "@/lib/session";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -69,141 +71,185 @@ async function load(id: string) {
 type Shipment = NonNullable<Awaited<ReturnType<typeof load>>>;
 
 const STEPS = [
-  ["Contract drafted", ["CONTRACT_PENDING"]],
-  ["Both parties accepted", ["CONTRACTED"]],
-  ["Picked up", ["IN_TRANSIT", "VERIFICATION_FAILED"]],
-  ["Delivery verified", ["VERIFIED"]],
-  ["Invoiced", ["INVOICED"]],
-  ["Paid (confirmed)", ["PAID", "DISPUTED", "CLOSED"]],
-] as const;
+  { label: "Contract drafted", tab: "contract", statuses: ["CONTRACT_PENDING"] },
+  { label: "Both parties accepted", tab: "contract", statuses: ["CONTRACTED"] },
+  { label: "Picked up", tab: "delivery", statuses: ["IN_TRANSIT", "VERIFICATION_FAILED"] },
+  { label: "Delivery verified", tab: "delivery", statuses: ["VERIFIED"] },
+  { label: "Invoice sent", tab: "payment", statuses: ["INVOICED"] },
+  { label: "Paid (confirmed)", tab: "payment", statuses: ["PAID", "DISPUTED", "CLOSED"] },
+];
 
 function stepIndex(status: string) {
-  const i = STEPS.findIndex(([, statuses]) => (statuses as readonly string[]).includes(status));
-  return status === "DRAFT" ? -1 : i;
+  return status === "DRAFT" ? -1 : STEPS.findIndex((step) => step.statuses.includes(status));
 }
 
-function nextStep(s: Shipment, user: SessionUser): string {
-  const role = user.role;
-  const operator = role === "EXPORTER" || role === "MANAGER";
+type TabId = "contract" | "delivery" | "payment" | "resolution";
+type Persona = Awaited<ReturnType<typeof listPersonas>>[number];
+
+/** What happens next on this shipment, the tab where it happens, and the person to switch to when it is someone else's turn. */
+interface Guide {
+  text: string;
+  tab: TabId;
+  switchTo?: Persona;
+}
+
+function guide(s: Shipment, user: SessionUser, personas: Persona[]): Guide {
+  const find = (role: Persona["role"], businessId: string) => personas.find((p) => p.role === role && p.businessId === businessId);
+  const exporter = find("EXPORTER", s.exporterId);
+  const manager = find("MANAGER", s.exporterId) ?? exporter;
+  const buyer = find("BUYER", s.buyerId);
+  const carrier = find("CARRIER", s.carrierId);
+  const operator = canApprove(user) && user.businessId === s.exporterId;
+  const isCarrier = user.businessId === s.carrierId;
+  const isBuyer = user.businessId === s.buyerId && user.role === "BUYER";
+
   const pending = s.approvalRequests.filter((a) => a.status === "PENDING");
-  if (pending.length) return operator ? `Approve or reject: ${pending[0].summary}.` : "Waiting for the exporter's operator to approve the agent's proposal.";
-  const contract = s.contracts.find((c) => c.status === "PENDING_ACCEPTANCE");
+  if (pending.length) {
+    const tab: TabId = pending[0].actionType === "INVOICE_SEND" ? "payment" : "resolution";
+    return operator
+      ? { text: `The AI has prepared an action and needs your decision. Check it below, then click Approve or Reject: ${pending[0].summary}.`, tab }
+      : { text: `The AI has prepared an action: ${pending[0].summary}. Nothing happens until the finance manager approves it.`, tab, switchTo: manager };
+  }
+
   switch (s.status) {
     case "DRAFT":
-      return operator ? "Draft the contract with Contract AI." : "Switch to the exporter to draft the contract.";
+      return operator
+        ? { text: "Click “Draft contract” below. Contract AI writes the contract from the shipment details and checks it for problems.", tab: "contract" }
+        : { text: "The exporter starts by drafting the contract.", tab: "contract", switchTo: exporter };
     case "CONTRACT_PENDING": {
-      if (!contract) return "The latest draft has a blocking flag: change the terms and redraft.";
+      const contract = s.contracts.find((c) => c.status === "PENDING_ACCEPTANCE");
+      if (!contract) {
+        return operator
+          ? { text: "This draft breaks a legal rule (see the red flag on the right). Change the credit period and redraft.", tab: "contract" }
+          : { text: "The draft breaks a legal rule. The exporter has to change the terms and redraft.", tab: "contract", switchTo: exporter };
+      }
       const accepted = contract.acceptances.map((a) => a.party);
       const missing = (["EXPORTER", "BUYER"] as const).filter((p) => !accepted.includes(p));
-      return `Waiting for acceptance by: ${missing.map((p) => p.toLowerCase()).join(" and ")}. Switch persona to accept.`;
+      const mine = user.businessId === s.exporterId ? "EXPORTER" : isBuyer ? "BUYER" : null;
+      if (mine && missing.includes(mine)) return { text: `Read the contract, then click “Accept as ${mine.toLowerCase()}” on the right.`, tab: "contract" };
+      if (!missing.length) return { text: "Both parties have accepted the contract.", tab: "contract" };
+      return { text: `The contract is waiting for the ${missing[0].toLowerCase()} to accept it.`, tab: "contract", switchTo: missing[0] === "EXPORTER" ? exporter : buyer };
     }
     case "CONTRACTED":
-      return role === "CARRIER" ? "Confirm pickup." : "Switch to the carrier to confirm pickup.";
+      return isCarrier
+        ? { text: "Both parties have accepted. Click “Confirm pickup” below once you have collected the cargo.", tab: "delivery" }
+        : { text: "Both parties have accepted. The carrier collects the cargo next.", tab: "delivery", switchTo: carrier };
     case "IN_TRANSIT":
     case "VERIFICATION_FAILED":
-      return role === "CARRIER" ? "Upload the signed POD and photos for Delivery AI." : "Switch to the carrier to upload proof of delivery.";
+      return isCarrier
+        ? { text: "Upload the signed proof of delivery and photos below (or click “Generate demo POD and photos”), then “Upload and verify”. Delivery AI checks them against the contract.", tab: "delivery" }
+        : { text: "The cargo is on its way. The carrier uploads the proof of delivery next.", tab: "delivery", switchTo: carrier };
     case "INVOICED": {
       const invoice = s.paypalInvoices[0];
-      if (invoice?.channel === "MANUAL_RECORD") return "Domestic invoice: draft reminders, prepare the MSME package, or record a verified payment.";
-      if (invoice && isMockId(invoice.paypalInvoiceId)) return "PayPal is mocked: simulate the buyer's payment on the Payment tab.";
-      return "The buyer pays the invoice in the PayPal sandbox. PayPal's webhook (or Sync from PayPal) confirms it.";
+      if (invoice?.channel === "MANUAL_RECORD") {
+        return operator
+          ? { text: "This invoice is unpaid. Below you can draft a reminder with AI, prepare the MSME evidence package, or record a payment you have checked with the bank.", tab: "payment" }
+          : { text: "This invoice is unpaid. The finance manager can send reminders and prepare the evidence package.", tab: "payment", switchTo: manager };
+      }
+      if (invoice && isMockId(invoice.paypalInvoiceId)) return { text: "PayPal is mocked here: click “Simulate buyer payment” below.", tab: "payment" };
+      return {
+        text: "The invoice is with the buyer. To pay it, open the link “Open the PayPal invoice as the buyer” below in a private window and log in with the PayPal sandbox buyer account. Then click “Sync from PayPal”.",
+        tab: "payment",
+      };
     }
-    case "PAID":
-      return role === "BUYER" ? "Report a problem with the goods on the Resolution tab (scenario 3)." : "Settled. Trust profiles updated. The buyer may raise a refund request or a dispute.";
+    case "PAID": {
+      const refundable = s.paypalInvoices.some((i) => i.paidAt && i.channel === "PAYPAL");
+      if (s.refundRequests.length) return { text: "Paid, and the refund request has been dealt with. The details are below.", tab: "resolution" };
+      if (isBuyer && refundable) return { text: "Paid. If something is wrong with the goods, report it below and Resolution AI will assess the claim (story 3).", tab: "resolution" };
+      return refundable
+        ? { text: "Paid and confirmed by PayPal. Trust profiles are updated. To try story 3 (damaged goods), continue as the buyer and report a problem.", tab: "payment", switchTo: buyer }
+        : { text: "Paid and recorded. Trust profiles are updated.", tab: "payment" };
+    }
     case "DISPUTED": {
       const responded = s.evidencePacks.some((p) => p.kind === "DISPUTE_RESPONSE" && p.status === "SUBMITTED");
-      if (responded) return "Dispute response sent. PayPal decides the outcome; the dispute webhook updates this shipment and the trust profiles.";
-      return operator ? "Prepare the dispute response with Resolution AI." : "Dispute open: waiting for the seller's response.";
+      if (responded) return { text: "The dispute response has been sent. PayPal decides the outcome and this page updates when it does.", tab: "resolution" };
+      return operator
+        ? { text: "The buyer has opened a dispute. Click “Prepare response” below and Resolution AI builds the case file for you to approve.", tab: "resolution" }
+        : { text: "A dispute is open. The finance manager prepares the response.", tab: "resolution", switchTo: manager };
     }
     default:
-      return "Nothing to do.";
+      return { text: "Nothing to do on this shipment right now.", tab: "payment" };
   }
 }
 
 export default async function ShipmentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [s, user] = await Promise.all([load(id), currentUser()]);
+  const [s, user, personas] = await Promise.all([load(id), currentUser(), listPersonas()]);
   if (!s) notFound();
   const operator = canApprove(user) && user.businessId === s.exporterId;
-  const step = stepIndex(s.status);
   const pending = s.approvalRequests.filter((a) => a.status === "PENDING" || a.status === "FAILED");
+  const next = guide(s, user, personas);
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="font-mono text-2xl font-semibold">{s.reference}</h1>
-            <StatusBadge status={s.status} />
-            {s.seeded && <Tag>seeded history</Tag>}
-            {s.destinationCountry === "IN" && <SimTag>domestic: manual payment record</SimTag>}
-          </div>
-          <p className="text-muted-foreground text-sm">
-            {s.quantity} {s.unit} of {s.cargoDescription}, {s.originCity} to {s.destinationCity}. Declared value {money(s.declaredValue, s.currency)}, freight{" "}
-            {money(s.freightAmount, s.currency)}, Net {s.creditTermsDays} ({s.jurisdictionPreset === "IN_MSMED" ? "MSMED preset" : "generic"}).
-          </p>
-          <p className="text-sm">
-            Exporter <Link className="text-primary hover:underline" href={`/trust/${s.exporterId}`}>{s.exporter.name}</Link> · Carrier{" "}
-            <Link className="text-primary hover:underline" href={`/trust/${s.carrierId}`}>{s.carrier.name}</Link> · Buyer{" "}
-            <Link className="text-primary hover:underline" href={`/trust/${s.buyerId}`}>{s.buyer.name}</Link>
-          </p>
+      <div className="flex flex-col gap-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="font-mono text-2xl font-semibold">{s.reference}</h1>
+          <StatusBadge status={s.status} />
+          {s.seeded && <Tag>pre-loaded demo record</Tag>}
+          {s.destinationCountry === "IN" && <SimTag>domestic: manual payment record</SimTag>}
         </div>
+        <p className="text-muted-foreground text-sm">
+          {s.quantity} {s.unit} of {s.cargoDescription}, {s.originCity} to {s.destinationCity}. Goods {money(s.declaredValue, s.currency)}, freight {money(s.freightAmount, s.currency)}, payment
+          due {s.creditTermsDays} days after delivery{s.jurisdictionPreset === "IN_MSMED" && " (India’s MSME late-payment law applies)"}.
+        </p>
+        <p className="text-sm">
+          Exporter <Link className="text-primary hover:underline" href={`/trust/${s.exporterId}`}>{s.exporter.name}</Link> · Carrier{" "}
+          <Link className="text-primary hover:underline" href={`/trust/${s.carrierId}`}>{s.carrier.name}</Link> · Buyer{" "}
+          <Link className="text-primary hover:underline" href={`/trust/${s.buyerId}`}>{s.buyer.name}</Link>
+        </p>
       </div>
 
-      <ol className="grid grid-cols-2 gap-2 sm:grid-cols-6">
-        {STEPS.map(([label], i) => (
-          <li key={label} className={cn("flex items-center gap-2 rounded-md border px-2 py-1.5 text-xs", i <= step ? "border-primary bg-primary/5" : "bg-card text-muted-foreground")}>
-            <span className={cn("flex size-5 shrink-0 items-center justify-center rounded-full text-[10px]", i <= step ? "bg-primary text-primary-foreground" : "bg-muted")}>
-              {i <= step ? <Check className="size-3" /> : i + 1}
-            </span>
-            {label}
-          </li>
-        ))}
-      </ol>
+      <ShipmentWorkspace
+        key={`${next.tab}-${user.id}`}
+        steps={STEPS.map(({ label, tab }) => ({ label, tab }))}
+        done={stepIndex(s.status)}
+        initialTab={next.tab}
+        top={
+          <>
+            <Alert className="border-primary/40 bg-primary/5">
+              <AlertTitle className="flex flex-wrap items-center gap-2">
+                What happens next
+                <span className="text-muted-foreground text-xs font-normal">
+                  You are viewing as {user.name} ({ROLE_LABEL[user.role]})
+                </span>
+              </AlertTitle>
+              <AlertDescription className="flex flex-col gap-3">
+                <p className="text-foreground text-sm">{next.text}</p>
+                {next.switchTo && next.switchTo.id !== user.id && (
+                  <form action={switchPersona}>
+                    <input type="hidden" name="userId" value={next.switchTo.id} />
+                    <Button type="submit" size="sm">
+                      Continue as {next.switchTo.name} ({ROLE_LABEL[next.switchTo.role]}) <ArrowRight />
+                    </Button>
+                  </form>
+                )}
+              </AlertDescription>
+            </Alert>
 
-      <Alert className="border-primary/40 bg-primary/5">
-        <AlertTitle>Next step for {user.name}</AlertTitle>
-        <AlertDescription>{nextStep(s, user)}</AlertDescription>
-      </Alert>
-
-      {pending.length > 0 && (
-        <Card className="border-amber-300">
-          <CardHeader>
-            <CardTitle>Waiting for approval</CardTitle>
-            <CardDescription>Agents propose; nothing reaches PayPal or the insurer until a person approves.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            {pending.map((a) => (
-              <ApprovalItem key={a.id} approval={a} canDecide={operator} />
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
-      <Tabs defaultValue="contract">
-        <TabsList>
-          <TabsTrigger value="contract">Contract</TabsTrigger>
-          <TabsTrigger value="delivery">Delivery</TabsTrigger>
-          <TabsTrigger value="payment">Payment</TabsTrigger>
-          <TabsTrigger value="resolution">Resolution</TabsTrigger>
-          <TabsTrigger value="audit">Audit ({s.auditEvents.length})</TabsTrigger>
-        </TabsList>
-        <TabsContent value="contract" className="pt-3">
-          <ContractTab s={s} user={user} operator={operator} />
-        </TabsContent>
-        <TabsContent value="delivery" className="pt-3">
-          <DeliveryTab s={s} user={user} />
-        </TabsContent>
-        <TabsContent value="payment" className="pt-3">
-          <PaymentTab s={s} user={user} operator={operator} />
-        </TabsContent>
-        <TabsContent value="resolution" className="pt-3">
-          <ResolutionTab s={s} user={user} operator={operator} />
-        </TabsContent>
-        <TabsContent value="audit" className="pt-3">
-          <AuditList events={s.auditEvents} />
-        </TabsContent>
-      </Tabs>
+            {pending.length > 0 && operator && (
+              <Card className="border-amber-300">
+                <CardHeader>
+                  <CardTitle>Needs your approval</CardTitle>
+                  <CardDescription>The AI only proposes. Nothing is sent to PayPal or the insurer until you approve it here.</CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-4">
+                  {pending.map((a) => (
+                    <ApprovalItem key={a.id} approval={a} canDecide={operator} />
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+          </>
+        }
+        panels={[
+          { id: "contract", label: "1. Contract", content: <ContractTab s={s} user={user} operator={operator} /> },
+          { id: "delivery", label: "2. Delivery", content: <DeliveryTab s={s} user={user} /> },
+          { id: "payment", label: "3. Payment", content: <PaymentTab s={s} user={user} operator={operator} /> },
+          { id: "resolution", label: "Problems and refunds", content: <ResolutionTab s={s} user={user} operator={operator} /> },
+          { id: "audit", label: `History (${s.auditEvents.length})`, content: <AuditList events={s.auditEvents} /> },
+        ]}
+      />
     </div>
   );
 }
@@ -236,17 +282,43 @@ function ContractTab({ s, user, operator }: { s: Shipment; user: SessionUser; op
         </CardContent>
       </Card>
       <div className="flex flex-col gap-4">
+        {contract && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Acceptance</CardTitle>
+              <CardDescription>Both sides accept exactly the same text (the SHA-256 code above the contract is its fingerprint). The AI never signs.</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2 text-sm">
+              {(["EXPORTER", "BUYER"] as const).map((p) => {
+                const a = contract.acceptances.find((x) => x.party === p);
+                return (
+                  <div key={p} className="flex items-center justify-between gap-2">
+                    <span>{humanize(p)}</span>
+                    {a ? (
+                      <span className="text-xs text-emerald-700">
+                        {a.user.name}, {dateTime(a.acceptedAt)}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground text-xs">not yet</span>
+                    )}
+                  </div>
+                );
+              })}
+              {canAccept && <ActionForm action={acceptContractAction} fields={{ contractId: contract.id }} label={`Accept as ${party?.toLowerCase()}`} />}
+            </CardContent>
+          </Card>
+        )}
         {operator && editable && (
           <Card>
             <CardHeader>
               <CardTitle>Contract AI</CardTitle>
-              <CardDescription>Fills the clause library from the shipment, flags issues and explains each section.</CardDescription>
+              <CardDescription>Writes the contract from the shipment details using fixed, human-written clauses, then flags problems and explains each section.</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               <ActionForm action={draftContractAction} fields={{ shipmentId: s.id }} label={contract ? "Redraft" : "Draft contract"} pendingLabel="Contract AI is drafting…" />
               <ActionForm action={changeTermsAction} fields={{ shipmentId: s.id }} label="Change and redraft" variant="outline" pendingLabel="Redrafting…">
                 <Label htmlFor="days" className="text-xs">
-                  Credit period (days). Try 60 to see the MSMED rule block it.
+                  Days the buyer has to pay. Try 60 to see the legal limit of 45 days block it.
                 </Label>
                 <Input id="days" name="days" type="number" min={0} max={365} defaultValue={s.creditTermsDays} className="h-8 w-28" />
               </ActionForm>
@@ -257,7 +329,7 @@ function ContractTab({ s, user, operator }: { s: Shipment; user: SessionUser; op
           <Card>
             <CardHeader>
               <CardTitle className="flex flex-wrap items-center gap-2">
-                Review <SourceTag source={review.source} model={review.model} />
+                AI review <SourceTag source={review.source} model={review.model} />
               </CardTitle>
               <CardDescription>{review.summary}</CardDescription>
             </CardHeader>
@@ -285,32 +357,6 @@ function ContractTab({ s, user, operator }: { s: Shipment; user: SessionUser; op
                   </dl>
                 </details>
               )}
-            </CardContent>
-          </Card>
-        )}
-        {contract && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Acceptance</CardTitle>
-              <CardDescription>Each party accepts this exact hash. The AI never signs.</CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-2 text-sm">
-              {(["EXPORTER", "BUYER"] as const).map((p) => {
-                const a = contract.acceptances.find((x) => x.party === p);
-                return (
-                  <div key={p} className="flex items-center justify-between gap-2">
-                    <span>{humanize(p)}</span>
-                    {a ? (
-                      <span className="text-xs text-emerald-700">
-                        {a.user.name}, {dateTime(a.acceptedAt)}
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground text-xs">not yet</span>
-                    )}
-                  </div>
-                );
-              })}
-              {canAccept && <ActionForm action={acceptContractAction} fields={{ contractId: contract.id }} label={`Accept as ${party?.toLowerCase()}`} />}
             </CardContent>
           </Card>
         )}
@@ -363,6 +409,35 @@ function ContractTab({ s, user, operator }: { s: Shipment; user: SessionUser; op
       </div>
     </div>
   );
+}
+
+const STAGE_LABEL: Record<string, string> = {
+  T_MINUS_7: "7 days before the due date",
+  T_MINUS_1: "1 day before the due date",
+  T_PLUS_1: "1 day overdue",
+  T_PLUS_15: "15 days overdue",
+  FINAL_NOTICE: "Final notice",
+};
+
+/** Plain wording for a reminder stage such as T_MINUS_7. */
+const stageLabel = (stage: string) => STAGE_LABEL[stage] ?? humanize(stage);
+
+/** What Delivery AI read from the proof of delivery, in the order shown. */
+const POD_FIELDS = [
+  ["consigneeName", "Received by"],
+  ["signaturePresent", "Signed"],
+  ["deliveredOn", "Delivered on"],
+  ["quantityReceived", "Quantity received"],
+  ["damagedUnits", "Damaged units"],
+  ["conditionNotes", "Condition notes"],
+  ["sealIntact", "Seal intact"],
+] as const;
+
+function plainValue(key: string, value: unknown): string {
+  if (value === null || value === undefined || value === "") return "–";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (key === "deliveredOn" && typeof value === "string" && !Number.isNaN(Date.parse(value))) return day(new Date(value));
+  return String(value);
 }
 
 function DeliveryTab({ s, user }: { s: Shipment; user: SessionUser }) {
@@ -424,7 +499,7 @@ function DeliveryTab({ s, user }: { s: Shipment; user: SessionUser }) {
           <Card key={r.id}>
             <CardHeader>
               <CardTitle className="flex flex-wrap items-center gap-2">
-                Verification report <StatusBadge status={r.status} /> <Tag>confidence {Math.round(r.confidence * 100)}%</Tag>
+                What the AI found <StatusBadge status={r.status} /> <Tag>AI confidence {Math.round(r.confidence * 100)}%</Tag>
                 {x.source === "sample" && <SimTag>sample AI output</SimTag>}
               </CardTitle>
               <CardDescription>{r.summary}</CardDescription>
@@ -432,18 +507,18 @@ function DeliveryTab({ s, user }: { s: Shipment; user: SessionUser }) {
             <CardContent className="grid gap-4 md:grid-cols-2">
               <table className="text-sm">
                 <tbody>
-                  {["consigneeName", "signaturePresent", "deliveredOn", "quantityReceived", "damagedUnits", "conditionNotes", "sealIntact"].map((k) =>
+                  {POD_FIELDS.map(([k, label]) =>
                     k in x ? (
                       <tr key={k} className="border-b last:border-0">
-                        <td className="text-muted-foreground py-1 pr-3 text-xs">{humanize(k.replace(/([A-Z])/g, "_$1"))}</td>
-                        <td className="py-1">{String(x[k] ?? "–")}</td>
+                        <td className="text-muted-foreground py-1 pr-3 text-xs">{label}</td>
+                        <td className="py-1">{plainValue(k, x[k])}</td>
                       </tr>
                     ) : null,
                   )}
                 </tbody>
               </table>
               <div className="flex flex-col gap-2">
-                {discrepancies.length === 0 && <p className="text-sm text-emerald-700">No discrepancies.</p>}
+                {discrepancies.length === 0 && <p className="text-sm text-emerald-700">Everything matches the contract.</p>}
                 {discrepancies.map((d, i) => (
                   <div key={i} className="rounded-md border p-2 text-sm">
                     <div className="flex items-center gap-2">
@@ -550,7 +625,7 @@ function PaymentTab({ s, user, operator }: { s: Shipment; user: SessionUser; ope
                     Credit clock <StatusBadge status={inv.paidAt ? "PAID" : daysLeft !== null && daysLeft < 0 ? "OVERDUE" : "RUNNING"} />
                   </CardTitle>
                   <CardDescription>
-                    Starts on acceptance of goods ({day(clock.acceptanceDate)}). {clock.preset === "IN_MSMED" ? "MSMED Act, 2006: s.15 caps credit at 45 days; s.16 interest at 3x the RBI bank rate, compounded monthly." : "Generic Net terms."}
+                    Counts the days until payment is due, starting when the goods were accepted ({day(clock.acceptanceDate)}). {clock.preset === "IN_MSMED" ? "MSMED Act, 2006: s.15 caps credit at 45 days; s.16 interest at 3x the RBI bank rate, compounded monthly." : "Generic Net terms."}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-2 text-sm">
@@ -560,18 +635,18 @@ function PaymentTab({ s, user, operator }: { s: Shipment; user: SessionUser; ope
                     </div>
                   )}
                   <div className="flex justify-between">
-                    <span>Due (Net {clock.agreedDays})</span>
+                    <span>Due date ({clock.agreedDays} days after delivery)</span>
                     <span>{day(clock.dueDate)}</span>
                   </div>
                   {clock.statutoryDueDate && (
                     <div className="flex justify-between">
-                      <span>Statutory due date</span>
+                      <span>Latest due date the law allows</span>
                       <span>{day(clock.statutoryDueDate)}</span>
                     </div>
                   )}
                   {clock.interestRatePct && (
                     <div className="flex justify-between">
-                      <span>Interest {num(clock.interestRatePct)}% a year</span>
+                      <span>Late-payment interest so far ({num(clock.interestRatePct)}% a year)</span>
                       <span className={cn(interest > 0 && "font-medium text-red-700")}>{money(interest, inv.currency)}</span>
                     </div>
                   )}
@@ -581,7 +656,7 @@ function PaymentTab({ s, user, operator }: { s: Shipment; user: SessionUser; ope
                     {clock.reminders.map((r) => (
                       <details key={r.id} className="rounded border px-2 py-1 text-xs">
                         <summary className="cursor-pointer">
-                          {r.stage.replace(/_/g, " ")} · {r.tone} · {r.sentAt ? `sent ${day(r.sentAt)}` : "draft"} · {r.channel === "EMAIL_STUB" ? "email" : "PayPal reminder"}
+                          {stageLabel(r.stage)} · {r.tone.toLowerCase()} tone · {r.sentAt ? `sent ${day(r.sentAt)}` : "draft, not sent"} · {r.channel === "EMAIL_STUB" ? "email" : "PayPal reminder"}
                         </summary>
                         <p className="mt-1 font-medium">{r.subject}</p>
                         <p className="whitespace-pre-line">{r.body}</p>
@@ -592,7 +667,7 @@ function PaymentTab({ s, user, operator }: { s: Shipment; user: SessionUser; ope
                     <div className="flex flex-wrap gap-3 pt-2">
                       <ActionForm action={draftReminderAction} fields={{ invoiceId: inv.id }} label="Draft next reminder (AI)" variant="outline" pendingLabel="Payment AI is drafting…" />
                       {unsent.map((r) => (
-                        <ActionForm key={r.id} action={sendReminderAction} fields={{ reminderId: r.id }} label={`Send ${r.stage.replace(/_/g, " ").toLowerCase()}`} />
+                        <ActionForm key={r.id} action={sendReminderAction} fields={{ reminderId: r.id }} label={`Send reminder: ${stageLabel(r.stage).toLowerCase()}`} />
                       ))}
                     </div>
                   )}
@@ -607,6 +682,11 @@ function PaymentTab({ s, user, operator }: { s: Shipment; user: SessionUser; ope
         );
       })}
       <EvidencePacks packs={s.evidencePacks.filter((p) => p.kind === "MSME_SAMADHAAN")} />
+      {s.paypalInvoices.some((i) => i.channel === "PAYPAL") && (
+        <Link href="/paypal" className="text-primary text-sm hover:underline">
+          See all PayPal transactions →
+        </Link>
+      )}
     </div>
   );
 }

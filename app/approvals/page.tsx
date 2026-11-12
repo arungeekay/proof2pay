@@ -19,14 +19,14 @@ export default async function ApprovalsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Approval queue</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Approvals</h1>
         <p className="text-muted-foreground text-sm">
-          Agents recommend; people decide. Invoices, refunds, dispute responses and insurance claims wait here until an operator approves them.
-          {!allowed && " Switch to the exporter or the finance manager to decide."}
+          The AI proposes; a person decides. Invoices, refunds, dispute responses and insurance claims wait here until the exporter or the finance manager approves them.
+          {!allowed && " You are viewing as someone who cannot approve: switch to the finance manager with “Viewing as” at the top right."}
         </p>
       </div>
       <section className="flex flex-col gap-3">
-        {open.length === 0 && <p className="text-muted-foreground text-sm">Nothing waiting.</p>}
+        {open.length === 0 && <p className="text-muted-foreground text-sm">Nothing is waiting for approval.</p>}
         {open.map((a) => (
           <ApprovalItem key={a.id} approval={a} canDecide={allowed} showShipment />
         ))}

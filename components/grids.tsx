@@ -1,6 +1,6 @@
 "use client";
 
-// Operational tables on AG Grid Community (free, MIT): the receivables ledger and the audit trail.
+// Operational tables on AG Grid Community (free, MIT): the receivables ledger, the PayPal activity list and the audit trail.
 
 import { AllCommunityModule, ModuleRegistry, themeQuartz, type ColDef, type ICellRendererParams } from "ag-grid-community";
 import { AgGridReact } from "ag-grid-react";
@@ -71,6 +71,47 @@ export function ReceivablesGrid({ rows }: { rows: ReceivableRow[] }) {
   return (
     <div style={{ height: 560 }}>
       <AgGridReact theme={theme} rowData={rows} columnDefs={receivableColumns} defaultColDef={{ sortable: true, resizable: true }} />
+    </div>
+  );
+}
+
+export interface PayPalRow {
+  id: string;
+  when: string;
+  type: "Invoice sent" | "Payment received" | "Refund paid" | "Dispute opened";
+  shipmentId: string | null;
+  reference: string | null;
+  party: string;
+  currency: string;
+  amount: number;
+  status: string;
+  paypalId: string;
+  source: "PayPal sandbox" | "Demo history" | "Mocked" | "Replayed";
+}
+
+const TYPE_STYLE: Record<string, string> = { "Payment received": "#067647", "Refund paid": "#b42318", "Dispute opened": "#b54708", "Invoice sent": "#1f4fa3" };
+
+const paypalColumns: ColDef<PayPalRow>[] = [
+  { field: "when", headerName: "Date (IST)", width: 140, sortable: false },
+  { field: "type", width: 170, filter: true, cellStyle: (p) => ({ color: TYPE_STYLE[p.value] ?? "inherit", fontWeight: 600 }) },
+  { field: "reference", headerName: "Shipment", width: 120, filter: true, cellRenderer: ShipmentLink },
+  { field: "party", headerName: "Buyer", flex: 1, minWidth: 180, filter: true },
+  {
+    field: "amount",
+    width: 140,
+    type: "rightAligned",
+    cellStyle: (p) => (p.value < 0 ? { color: "#b42318" } : null),
+    valueFormatter: (p) => (p.value ? fmt(p.data!.currency, p.value) : "–"),
+  },
+  { field: "status", width: 150, filter: true },
+  { field: "paypalId", headerName: "PayPal ID", width: 230, filter: true, cellClass: "font-mono" },
+  { field: "source", width: 150, filter: true },
+];
+
+export function PayPalGrid({ rows }: { rows: PayPalRow[] }) {
+  return (
+    <div style={{ height: 520 }}>
+      <AgGridReact theme={theme} rowData={rows} columnDefs={paypalColumns} defaultColDef={{ sortable: true, resizable: true }} getRowId={(p) => p.data.id} />
     </div>
   );
 }

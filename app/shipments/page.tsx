@@ -15,7 +15,7 @@ export default async function ShipmentsPage() {
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Shipments</h1>
-        <p className="text-muted-foreground text-sm">SH-1042 is the live demo shipment. Earlier shipments are seeded history that feeds the trust profiles.</p>
+        <p className="text-muted-foreground text-sm">Click a reference to open a shipment. SH-1042 and SH-1039 are the demo stories; the rows marked “history” are past shipments that feed the trust profiles.</p>
       </div>
       <div className="bg-card rounded-lg border">
         <Table>

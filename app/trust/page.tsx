@@ -15,7 +15,7 @@ export default async function TrustIndex() {
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Trust profiles</h1>
-        <p className="text-muted-foreground text-sm">Built only from verified events: PayPal-confirmed payments, manually verified records, delivery verification and resolved disputes.</p>
+        <p className="text-muted-foreground text-sm">How reliably each business pays and delivers. Click a card for the detail. Profiles are built only from verified events: payments confirmed by PayPal or checked by hand, verified deliveries and resolved disputes.</p>
       </div>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {profiles.map(({ business, payer, carrier }) => (

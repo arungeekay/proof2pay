@@ -4,15 +4,15 @@ import { ActionForm } from "@/components/action-form";
 import { StatusBadge, Tag } from "@/components/status";
 import { Input } from "@/components/ui/input";
 import type { ApprovalRequest } from "@/generated/prisma/client";
-import { dateTime, humanize, money } from "@/lib/format";
+import { actionLabel, agentLabel, dateTime, money } from "@/lib/format";
 
 export function ApprovalItem({ approval: a, canDecide, showShipment }: { approval: ApprovalRequest & { shipment?: { id: string; reference: string } | null }; canDecide: boolean; showShipment?: boolean }) {
   const payload = a.payload as Record<string, unknown>;
   return (
     <div className="flex flex-col gap-2 rounded-md border p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <Tag tone="info">{humanize(a.agent)}</Tag>
-        <Tag>{humanize(a.actionType)}</Tag>
+        <Tag tone="info">Proposed by {agentLabel(a.agent)}</Tag>
+        <Tag>{actionLabel(a.actionType)}</Tag>
         <StatusBadge status={a.status} />
         {showShipment && a.shipment && (
           <Link href={`/shipments/${a.shipment.id}`} className="text-primary font-mono text-xs hover:underline">
@@ -45,7 +45,7 @@ export function ApprovalItem({ approval: a, canDecide, showShipment }: { approva
           <Input name="note" placeholder="Note (optional)" className="h-8 max-w-md text-xs" />
         </ActionForm>
       ) : (
-        <p className="text-muted-foreground text-xs">Only the exporter or the finance manager can decide.</p>
+        <p className="text-muted-foreground text-xs">Only the exporter or the finance manager can approve this. Use “Viewing as” at the top right to switch.</p>
       )}
     </div>
   );

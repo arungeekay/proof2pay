@@ -32,7 +32,7 @@ export default async function AuditPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Audit trail</h1>
         <p className="text-muted-foreground text-sm">
-          Every agent action, operator decision and PayPal webhook, with its reasoning, model and evidence. Filter any column. Seed records are hidden.
+          The full record of who did what and why: every AI action, every human decision and every PayPal notification, with its reasoning and evidence. Type in a column header to filter.
         </p>
       </div>
       <AuditGrid rows={rows} />

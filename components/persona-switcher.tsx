@@ -14,10 +14,11 @@ export function PersonaSwitcher({
   const formRef = useRef<HTMLFormElement>(null);
   return (
     <form ref={formRef} action={action} className="flex items-center gap-2 text-sm">
-      <label htmlFor="persona" className="text-muted-foreground hidden xl:inline">
-        Acting as
+      <label htmlFor="persona" className="text-muted-foreground hidden sm:inline" title="This demo has no login. Pick a person to see the app as they see it.">
+        Viewing as
       </label>
       <select
+        key={currentId}
         id="persona"
         name="userId"
         defaultValue={currentId}

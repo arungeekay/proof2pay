@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
 import { switchPersona } from "@/app/actions";
+import { MainNav } from "@/components/main-nav";
 import { PersonaSwitcher } from "@/components/persona-switcher";
 import { SimTag, Tag } from "@/components/status";
 import { db } from "@/lib/db";
+import { ROLE_LABEL } from "@/lib/format";
 import { paypalConfigured } from "@/lib/paypal/client";
 import { currentUser, listPersonas } from "@/lib/session";
 import "./globals.css";
@@ -19,17 +21,6 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-const NAV = [
-  ["/shipments", "Shipments"],
-  ["/approvals", "Approvals"],
-  ["/receivables", "Receivables"],
-  ["/trust", "Trust"],
-  ["/audit", "Audit trail"],
-  ["/command-center", "Command center"],
-] as const;
-
-const ROLE_LABEL = { EXPORTER: "Exporter", CARRIER: "Carrier", BUYER: "Buyer", MANAGER: "Finance manager" } as const;
-
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const [user, personas, pending] = await Promise.all([currentUser(), listPersonas(), db.approvalRequest.count({ where: { status: "PENDING" } })]);
   return (
@@ -40,16 +31,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             <Link href="/" className="text-primary text-lg font-semibold tracking-tight">
               Proof2Pay
             </Link>
-            <nav className="flex flex-wrap gap-1 text-sm">
-              {NAV.map(([href, label]) => (
-                <Link key={href} href={href} className="hover:bg-muted rounded-md px-2.5 py-1.5">
-                  {label}
-                  {href === "/approvals" && pending > 0 && (
-                    <span className="bg-primary text-primary-foreground ml-1.5 rounded-full px-1.5 text-xs">{pending}</span>
-                  )}
-                </Link>
-              ))}
-            </nav>
+            <MainNav pending={pending} />
             <div className="ml-auto flex items-center gap-3">
               {paypalConfigured() ? <Tag tone="info">PayPal sandbox</Tag> : <SimTag>PayPal mocked</SimTag>}
               <PersonaSwitcher
